@@ -82,7 +82,7 @@ The bundle registers `<abap2ui5-app>`; give the element a height.
 
 ```jsx
 // React 19 (custom elements are first-class; React 18: addEventListener in a ref effect)
-import '@abap2ui5/frontend-webcomponent';
+import '@abap2ui5/embed-webcomponent';
 export const Abap2UI5 = ({ app }) => (
   <abap2ui5-app endpoint="/sap/bc/z2ui5" app={app} style={{ display: 'block', height: 600 }} />
 );
@@ -90,7 +90,7 @@ export const Abap2UI5 = ({ app }) => (
 
 ```vue
 <!-- Vue 3 - compilerOptions.isCustomElement: (t) => t === 'abap2ui5-app' -->
-<script setup>import '@abap2ui5/frontend-webcomponent';</script>
+<script setup>import '@abap2ui5/embed-webcomponent';</script>
 <template>
   <abap2ui5-app endpoint="/sap/bc/z2ui5" :app="app" style="display:block;height:600px"
                 @abap2ui5-message="onMessage" />

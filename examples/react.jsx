@@ -1,6 +1,6 @@
 // React 19: custom elements are first-class - attributes pass through,
 // and `on<event>` props subscribe to the element's custom events.
-import '@abap2ui5/frontend-webcomponent'; // or <script type="module" src=".../abap2ui5-wc.js">
+import '@abap2ui5/embed-webcomponent'; // or <script type="module" src=".../abap2ui5-wc.js">
 
 export default function Abap2UI5({ app }) {
   return (

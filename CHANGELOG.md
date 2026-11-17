@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- **Renamed to `embed-webcomponent`**: the repository is
+  abap2UI5/embed-webcomponent (was frontend-webcomponent; GitHub redirects
+  the old address), and the npm package `@abap2ui5/embed-webcomponent` (was
+  `@abap2ui5/frontend-webcomponent`, never published). The custom element
+  `<abap2ui5-app>` and `dist/abap2ui5-wc.js` keep their names.
 - **Backend markup can no longer restyle the whole view**: FormattedText,
   `core:HTML` and the error dialog's details kept a `<style>` element, and
   its rules applied to the entire shadow root - `ui5-button { display: none }`
