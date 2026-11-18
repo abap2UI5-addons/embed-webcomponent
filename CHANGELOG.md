@@ -3,7 +3,7 @@
 ## Unreleased
 
 - **Renamed to `embed-webcomponent`**: the repository is
-  abap2UI5/embed-webcomponent (was frontend-webcomponent; GitHub redirects
+  abap2UI5-addons/embed-webcomponent (was abap2UI5/frontend-webcomponent; GitHub redirects
   the old address), and the npm package `@abap2ui5/embed-webcomponent` (was
   `@abap2ui5/frontend-webcomponent`, never published). The custom element
   `<abap2ui5-app>` and `dist/abap2ui5-wc.js` keep their names.
