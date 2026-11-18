@@ -13,7 +13,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/abap2UI5/embed-webcomponent.git"
+    "url": "git+https://github.com/abap2UI5-addons/embed-webcomponent.git"
   },
   "main": "dist/abap2ui5-wc.js",
   "module": "dist/abap2ui5-wc.js",
