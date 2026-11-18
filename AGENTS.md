@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Single source of truth for agents working on **abap2UI5 frontend-webcomponent**
+Single source of truth for agents working on **abap2UI5 embed-webcomponent**
 - the abap2UI5 frontend that renders portable-profile views with UI5 Web
 Components, standalone or embedded as `<abap2ui5-app>`.
 

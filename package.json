@@ -1,5 +1,5 @@
 {
-  "name": "@abap2ui5/frontend-webcomponent",
+  "name": "@abap2ui5/embed-webcomponent",
   "version": "0.1.0",
   "description": "An alternative abap2UI5 frontend: renders portable-profile views with UI5 Web Components, standalone or embedded as <abap2ui5-app> in any web app.",
   "keywords": [
@@ -13,7 +13,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/abap2UI5/frontend-webcomponent.git"
+    "url": "git+https://github.com/abap2UI5/embed-webcomponent.git"
   },
   "main": "dist/abap2ui5-wc.js",
   "module": "dist/abap2ui5-wc.js",

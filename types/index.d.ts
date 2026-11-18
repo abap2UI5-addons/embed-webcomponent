@@ -1,5 +1,5 @@
 /*
- * @abap2ui5/frontend-webcomponent - the types of the custom element, its
+ * @abap2ui5/embed-webcomponent - the types of the custom element, its
  * events and the exported building blocks. The element's configuration is
  * its attributes (see README "Embedding").
  */

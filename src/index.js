@@ -1,5 +1,5 @@
 /*
- * @abap2ui5/frontend-webcomponent - the ESM entry (dist/abap2ui5-wc.js).
+ * @abap2ui5/embed-webcomponent - the ESM entry (dist/abap2ui5-wc.js).
  *
  * Importing it registers <abap2ui5-app>. The building blocks are exported
  * for hosts that want the protocol client or the renderer on their own.
