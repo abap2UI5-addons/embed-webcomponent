@@ -20,7 +20,7 @@ core**. One ES module, one custom element:
 
 ![The editable-table sample of abap2UI5/samples, unchanged, in the web-components frontend](docs/screenshots/z2ui5_cl_smp_app_011.png)
 
-## What it implements
+## Features
 
 The [abap2UI5 protocol](https://github.com/abap2UI5/protocol) is layered:
 
@@ -66,7 +66,7 @@ renders a visible `[formatter name]` placeholder and is reported. Tables and
 lists grow: `growing` / `growingThreshold` / `growingTriggerText` /
 `growingScrollToLoad` render the first rows and a "More" trigger.
 
-## Embedding
+## Usage
 
 The bundle registers `<abap2ui5-app>`; give the element a height.
 
@@ -381,7 +381,7 @@ Beyond v1 (31):
 is accepted, ignored and logged (`property:` in the console), as the profile
 requires.
 
-## Limits
+## Limitations
 
 - **Not rendered:** controls outside the portable profile (sap.ui.table,
   sap.f, sap.uxap, sap.ui.comp, z2ui5.cc custom controls, ...) - visible box +
@@ -423,6 +423,11 @@ requires.
 
 See [AGENTS.md](AGENTS.md) for the repository rules and
 [CHANGELOG.md](CHANGELOG.md) for the history.
+
+## Contributing
+
+Issues and pull requests are welcome - see [CONTRIBUTING.md](CONTRIBUTING.md) for
+what CI checks.
 
 ## License
 

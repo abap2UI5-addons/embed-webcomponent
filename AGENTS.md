@@ -71,7 +71,7 @@ texts, documentation, and every text the frontend shows.
 - **Keep the bundle lean:** import only the web components a mapper creates;
   report the size (`npm run build` prints it) when it changes notably.
 - The e2e tests run with **one worker** - one backend process, see README
-  "Limits".
+  "Limitations".
 
 ## Checks (CI = `.github/workflows/ci.yml`)
 
