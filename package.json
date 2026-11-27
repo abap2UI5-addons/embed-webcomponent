@@ -58,8 +58,8 @@
     "@ui5/webcomponents-localization": "2.27.2"
   },
   "devDependencies": {
-    "@abap2ui5/node-runtime": "1.146.0",
-    "@abaplint/transpiler-cli": "2.13.93",
+    "@abap2ui5/node-runtime": "1.151.0",
+    "@abaplint/transpiler-cli": "2.14.35",
     "@eslint/js": "10.0.1",
     "@playwright/test": "1.64.0",
     "eslint": "10.12.0",

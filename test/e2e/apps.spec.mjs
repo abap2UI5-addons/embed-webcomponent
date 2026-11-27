@@ -4,7 +4,7 @@
  * the same in the official UI5 SPA against the same backend and compare
  * what the two frontends sent.
  */
-import { test, expect, roundtrip, toastText, boxText, CROSS } from './fixtures.mjs';
+import { test, expect, roundtrip, toastText, boxText, customActions, shownSlots, navOf, CROSS } from './fixtures.mjs';
 
 test.describe('Z2UI5_CL_SMP_APP_493 hello world', () => {
   test('renders shell, page, strip and title', async ({ wc }) => {
@@ -116,7 +116,7 @@ test.describe('Z2UI5_CL_SMP_APP_382 message box', () => {
     await ui5.open('Z2UI5_CL_SMP_APP_382');
     await ui5.setValue('sap.m.Input', 1, 'Really?');
     const u = await ui5.press('Confirm');
-    expect(u.response.S_FRONT.S_ACTION.T_CUSTOM).toEqual(response.S_FRONT.S_ACTION.T_CUSTOM);
+    expect(customActions(u.response)).toEqual(customActions(response));
     expect(ui5.rec.events()[0]).toEqual(wc.rec.events()[0]);
   });
 });
@@ -225,7 +225,7 @@ test.describe('Z2UI5_CL_SMP_APP_012 popups', () => {
   test('popup over the page, decide with a roundtrip; info popup closed on the client', async ({ wc, ui5 }) => {
     await wc.open('Z2UI5_CL_SMP_APP_012');
     const open = await wc.press('popup, background unchanged (default) - close with server');
-    expect(open.response.S_FRONT.S_ACTION.T_SYSTEM.some((a) => a[1] === 'display' && a[2] === 'POPUP')).toBe(true);
+    expect(shownSlots(open.response)).toContain('POPUP');
     const dialog = wc.page.locator('abap2ui5-app .a2u-overlays ui5-dialog[data-slot="POPUP"]');
     await expect(dialog).toHaveAttribute('header-text', 'Popup - Decide');
     await expect(dialog).toHaveJSProperty('open', true);
@@ -355,7 +355,7 @@ test.describe('Z2UI5_CL_SMP_APP_125 set title', () => {
     await wc.open('Z2UI5_CL_SMP_APP_125');
     await wc.fill(wc.control('sap.m.Input'), 'Hello from ABAP');
     const r = await wc.press('Set Title');
-    expect(r.response.S_FRONT.S_ACTION.T_CUSTOM).toEqual([['SET_TITLE', 'Hello from ABAP']]);
+    expect(customActions(r.response)).toEqual([['SET_TITLE', 'Hello from ABAP']]);
     await expect(wc.page).toHaveTitle('Hello from ABAP');
 
     if (!CROSS) return;
@@ -412,8 +412,7 @@ test.describe('Z2UI5_CL_SMP_APP_480 hash routing (KEEP)', () => {
   test('route per draft, nav_app_call pushes, browser Back restores the caller with its edits', async ({ wc, ui5 }) => {
     await wc.open('Z2UI5_CL_SMP_APP_480');
     const start = wc.rec.last;
-    const routerOf = (res) => (res.S_FRONT.S_ACTION.T_SYSTEM || []).find((a) => a[0] === 'ROUTER');
-    expect(routerOf(start.response)[2].setNavRouting).toBe('KEEP');
+    expect(navOf(start.response).setNavRouting).toBe('KEEP');
     await expect.poll(() => hashOf(wc.page)).toBe(`#/app/Z2UI5_CL_SMP_APP_480/${start.response.S_FRONT.ID}`);
     await wc.fill(wc.control('sap.m.Input'), 'state A');
     const inc = await wc.press('increment (0)');
@@ -422,7 +421,7 @@ test.describe('Z2UI5_CL_SMP_APP_480 hash routing (KEEP)', () => {
     await expect.poll(() => hashOf(wc.page)).toBe(`#/app/Z2UI5_CL_SMP_APP_480/${inc.response.S_FRONT.ID}`);
     const historyBefore = await wc.page.evaluate(() => history.length);
     const call = await wc.press('go to the detail page (nav_app_call)');
-    const opts = routerOf(call.response)[2];
+    const opts = navOf(call.response);
     expect(opts.checkNavAppCall).toBe(true);
     await expect(wc.main()).toHaveAttribute('data-app', 'Z2UI5_CL_SMP_APP_469');
     await expect.poll(() => hashOf(wc.page)).toBe(`#/app/Z2UI5_CL_SMP_APP_469/${call.response.S_FRONT.ID}`);
@@ -449,7 +448,7 @@ test.describe('Z2UI5_CL_SMP_APP_480 hash routing (KEEP)', () => {
     await ui5.setBound('sap.m.Input', '/INPUT', 'state A');
     await ui5.press('increment (0)');
     const ucall = await ui5.press('go to the detail page (nav_app_call)');
-    const uopts = routerOf(ucall.response)[2];
+    const uopts = navOf(ucall.response);
     const uback = await roundtrip(ui5.page, () => ui5.page.goBack({ waitUntil: 'commit' }));
     expect(uback.request.S_FRONT.ID).toBeUndefined();
     expect(uback.request.S_FRONT.HASH).toBe(`#/app/${uopts.navAppCallPrevApp}/${uopts.navAppCallPrevId}`);

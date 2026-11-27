@@ -222,7 +222,7 @@ export class FrontendApp {
       // follow-up actions (a HASH_BACK among them steps from there)
       if (this.router) {
         if (appChanged) this.router.appChanged();
-        this.router.sync(routerOptions || {}, { id: state.id, app: state.app });
+        this.router.sync(routerOptions || {}, { id: state.id, app: state.app, protocol: this.session.protocol });
       }
       for (const item of custom) this.actions.run(item, 'MAIN');
       this.emit('abap2ui5-response', { app: state.app, id: state.id, slots: Object.keys(state.slots) });
@@ -370,7 +370,7 @@ export class FrontendApp {
       openUrl: (url, target) => this.win.open(url, target, target === '_blank' ? 'noopener' : undefined),
       navigate: (url) => { this.win.location.href = url; },
       route: (options) => {
-        if (this.router) this.router.sync(options, { id: this.session.state.id, app: this.session.state.app });
+        if (this.router) this.router.sync(options, { id: this.session.state.id, app: this.session.state.app, protocol: this.session.protocol });
         else this.report({ kind: 'action', detail: `${Object.keys(options)[0]}: routing is off` });
       },
       back: (fallback) => {

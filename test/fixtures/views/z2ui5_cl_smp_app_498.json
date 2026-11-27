@@ -1,0 +1,27 @@
+{
+ "S_FRONT": {
+  "APP": "Z2UI5_CL_SMP_APP_498",
+  "ID": "FIXTURE",
+  "NAV": {
+   "setAppStateActive": true
+  },
+  "PROTOCOL": 3,
+  "VIEWS": {
+   "MAIN": {
+    "XML": "<mvc:View displayBlock=\"true\" height=\"100%\" xmlns=\"sap.m\" xmlns:mvc=\"sap.ui.core.mvc\" xmlns:form=\"sap.ui.layout.form\"><Shell><Page title=\"abap2UI5 - Hash - App State, Bookmark and Share\" showNavButton=\"false\" navButtonPress=\".eB(['___ZZZ_NAL'])\"><MessageStrip text=\"app_state_set_active( ) keeps the id of the CURRENT app state in the URL (#/z2ui5-xapp-state=...). Type something, press post - and then reload the page, bookmark it, or share it: the state comes back.\" type=\"Information\" showIcon=\"true\" class=\"sapUiSmallMargin\"/><form:SimpleForm title=\"The state a link can carry\" editable=\"true\"><form:content><Label text=\"quantity\"/><Input value=\"{/QUANTITY}\"/><Label text=\"notes\"/><Input value=\"{/NOTES}\"/><Button press=\".eB(['POST'])\" text=\"post\" type=\"Emphasized\"/><Button press=\".eB(['SHARE'])\" text=\"share - copy the link\" icon=\"sap-icon://chain-link\"/><Label text=\"the link the share button copies\"/><Input value=\"{/SHARE_LINK}\" editable=\"false\"/><Label text=\"keep the state id in the URL\"/><Switch state=\"{/STATE_IN_URL}\" change=\".eB(['TOGGLE_STATE'])\"/></form:content></form:SimpleForm><MessageStrip text=\"Share copies a link to exactly this state into the clipboard - the Fiori sap-xapp-state idea with the draft as the state container. The link lives until the draft expires; after that it starts the app fresh.\" type=\"Success\" showIcon=\"true\" class=\"sapUiSmallMargin\"/></Page></Shell></mvc:View>"
+   },
+   "POPOVER": {
+    "DESTROY": true
+   },
+   "POPUP": {
+    "DESTROY": true
+   }
+  }
+ },
+ "MODEL": {
+  "NOTES": "",
+  "QUANTITY": "",
+  "SHARE_LINK": "",
+  "STATE_IN_URL": true
+ }
+}

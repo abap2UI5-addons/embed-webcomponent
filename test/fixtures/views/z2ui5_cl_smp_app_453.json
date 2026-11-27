@@ -2,16 +2,17 @@
  "S_FRONT": {
   "APP": "Z2UI5_CL_SMP_APP_453",
   "ID": "FIXTURE",
-  "PROTOCOL": 2,
-  "S_ACTION": {
-   "T_SYSTEM": [
-    [
-     "VIEW_SLOTS",
-     "display",
-     "MAIN",
-     "<mvc:View displayBlock=\"true\" height=\"100%\" xmlns=\"sap.m\" xmlns:mvc=\"sap.ui.core.mvc\"><Shell><Page title=\"abap2UI5 - Formatter - When Not to Use One: Compute in ABAP\" showNavButton=\"false\" navButtonPress=\".eB(['___ZZZ_NAL'])\"><MessageStrip text=\"Every column is bound to a plain model field. The state, the icon, the rounded price and the dimension string are computed in ABAP (products_prepare) - the frontend only renders. Z2UI5_CL_SMP_APP_450 shows what does belong in a formatter: the date conversion the backend physically cannot do.\" type=\"Information\" showIcon=\"true\" class=\"sapUiSmallMargin\"/><Table items=\"{/T_PRODUCTS}\" id=\"productTable\"><columns><Column><Text text=\"Product\"/></Column><Column><Text text=\"Weight (g)\"/></Column><Column><Text text=\"Price\"/></Column><Column><Text text=\"Dimensions\"/></Column><Column><Text text=\"Status\"/></Column><Column><Text text=\"Delivery\"/></Column></columns><items><ColumnListItem><cells><Text text=\"{NAME}\"/><ObjectNumber number=\"{WEIGHT}\" state=\"{WEIGHT_STATE}\" unit=\"g\"/><ObjectNumber number=\"{PRICE_DISP}\" unit=\"{CURRENCY}\"/><Text text=\"{DIMENSIONS}\"/><ObjectStatus icon=\"{STATUS_ICON}\" state=\"{STATUS_STATE}\" text=\"{STATUS}\"/><ObjectStatus state=\"{DELIVERY_STATE}\" text=\"{DELIVERY}\"/></cells></ColumnListItem></items></Table></Page></Shell></mvc:View>"
-    ]
-   ]
+  "PROTOCOL": 3,
+  "VIEWS": {
+   "MAIN": {
+    "XML": "<mvc:View displayBlock=\"true\" height=\"100%\" xmlns=\"sap.m\" xmlns:mvc=\"sap.ui.core.mvc\"><Shell><Page title=\"abap2UI5 - Formatter - When Not to Use One: Compute in ABAP\" showNavButton=\"false\" navButtonPress=\".eB(['___ZZZ_NAL'])\"><MessageStrip text=\"Every column is bound to a plain model field. The state, the icon, the rounded price and the dimension string are computed in ABAP (products_prepare) - the frontend only renders. Z2UI5_CL_SMP_APP_450 shows what does belong in a formatter: the date conversion the backend physically cannot do.\" type=\"Information\" showIcon=\"true\" class=\"sapUiSmallMargin\"/><Table items=\"{/T_PRODUCTS}\" id=\"productTable\"><columns><Column><Text text=\"Product\"/></Column><Column><Text text=\"Weight (g)\"/></Column><Column><Text text=\"Price\"/></Column><Column><Text text=\"Dimensions\"/></Column><Column><Text text=\"Status\"/></Column><Column><Text text=\"Delivery\"/></Column></columns><items><ColumnListItem><cells><Text text=\"{NAME}\"/><ObjectNumber number=\"{WEIGHT}\" state=\"{WEIGHT_STATE}\" unit=\"g\"/><ObjectNumber number=\"{PRICE_DISP}\" unit=\"{CURRENCY}\"/><Text text=\"{DIMENSIONS}\"/><ObjectStatus icon=\"{STATUS_ICON}\" state=\"{STATUS_STATE}\" text=\"{STATUS}\"/><ObjectStatus state=\"{DELIVERY_STATE}\" text=\"{DELIVERY}\"/></cells></ColumnListItem></items></Table></Page></Shell></mvc:View>"
+   },
+   "POPOVER": {
+    "DESTROY": true
+   },
+   "POPUP": {
+    "DESTROY": true
+   }
   }
  },
  "MODEL": {

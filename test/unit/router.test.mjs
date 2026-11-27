@@ -1,7 +1,7 @@
 /* The URL hash: routes, the app-state hash, app-owned hashes, HASH_BACK, embedded events. */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { Router, pageUrl, eventUrl, splitHash, parseRoute, appHashOf, patternFor } from '../../src/core/router.js';
+import { Router, pageUrl, eventUrl, splitHash, parseRoute, appHashOf, patternFor, appStateOf, startRoute } from '../../src/core/router.js';
 import { Session, PROTOCOL } from '../../src/core/session.js';
 import { createActions } from '../../src/core/actions.js';
 
@@ -239,6 +239,71 @@ test('session: the hash rides on every request; restore is app-start-shaped', as
   assert.equal(r.SEARCH, '?app_start=Z_A');
   assert.ok(r.CONFIG && r.CONFIG.S_DEVICE);
   assert.equal(sent[2].MODEL, undefined, 'the edits of the screen being left are not sent');
+  // protocol 3 resolves the start from ROUTE, never from HASH (spec/request.md "ROUTE")
+  assert.deepEqual(sent[0].S_FRONT.ROUTE, { APP: 'Z_A', DRAFT: 'D0' });
+  assert.equal(sent[1].S_FRONT.ROUTE, undefined, 'never with an ID');
+  assert.deepEqual(r.ROUTE, { APP: 'Z_A', DRAFT: 'OLD' });
+});
+
+test('startRoute: a route, an app-state link, nothing else (spec/request.md "ROUTE")', () => {
+  assert.deepEqual(startRoute('#/app/Z_A/D1'), { APP: 'Z_A', DRAFT: 'D1' });
+  assert.deepEqual(startRoute('#/app/Z_A'), { APP: 'Z_A' });
+  assert.deepEqual(startRoute('#/app//NS/CL_X/D9'), { APP: '/NS/CL_X', DRAFT: 'D9' });
+  assert.deepEqual(startRoute('#SO-act&/app/Z_A/D1'), { APP: 'Z_A', DRAFT: 'D1' }, 'inside the launchpad the app part');
+  assert.deepEqual(startRoute('#/z2ui5-xapp-state=D7'), { APP_STATE: 'D7' });
+  assert.deepEqual(startRoute('#SO-act&/x?a=1&Z2UI5-XAPP-STATE=D8'), { APP_STATE: 'D8' });
+  assert.equal(appStateOf('#/z2ui5-xapp-state=D7'), 'D7');
+  for (const h of ['', '#', '#/detail', '#SO-act', '#/app/']) assert.equal(startRoute(h), null, h);
+});
+
+test('session: an app start without a route in its hash sends no ROUTE, an embedded one neither HASH nor ROUTE', async () => {
+  const sent = [];
+  const mk = (hash) => new Session({
+    transport: { roundtrip: async (b) => { sent.push(b); return { ok: true, status: 200, body: JSON.stringify({ S_FRONT: { ID: 'D1', APP: 'Z_A', PROTOCOL } }) }; } },
+    location: (app) => ({ origin: 'http://h', pathname: '/p', search: `?app_start=${app}` }),
+    hash,
+  });
+  await mk(() => '#/detail').start('Z_A');
+  assert.equal(sent[0].S_FRONT.HASH, '#/detail');
+  assert.equal(sent[0].S_FRONT.ROUTE, undefined);
+  await mk(undefined).start('Z_A');
+  assert.equal(sent[1].S_FRONT.HASH, undefined);
+  assert.equal(sent[1].S_FRONT.ROUTE, undefined);
+});
+
+test('protocol 3: hash_set / hash_replace are written only for an app that owns the hash, as the whole app hash', () => {
+  const reports = [];
+  const mk = (initial) => {
+    const win = fakeWindow(initial);
+    const router = new Router({ url: pageUrl(win), navigate() {}, raise() {}, report: (d) => reports.push(d) });
+    router.start();
+    return { win, router };
+  };
+  const P3 = { protocol: 3 };
+  // no listener: not written (protocol 2 appended it), reported
+  const plain = mk('');
+  plain.router.sync({ setPushState: '&my-state=x' }, { id: 'D1', app: 'Z_A', ...P3 });
+  assert.deepEqual(plain.win.entries, ['']);
+  assert.match(reports[0].detail, /not written/);
+  // a listener: the whole app hash, pushed or replaced
+  const owned = mk('/detail');
+  owned.router.sync({ setHashEvent: 'HC' }, { id: 'D1', app: 'Z_A', ...P3 });
+  owned.router.sync({ setPushState: '/detail/b' }, { id: 'D2', app: 'Z_A', ...P3 });
+  owned.router.sync({ setHashReplace: '/detail/c' }, { id: 'D3', app: 'Z_A', ...P3 });
+  assert.deepEqual(owned.win.entries, ['/detail', '/detail/c']);
+  owned.router.sync({}, { id: 'D4', app: 'Z_A', ...P3 });
+  assert.equal(owned.win.location.hash, '#/detail/c', 'the listener owns the hash: no cleanup');
+  // under KEEP routing the hash is the router's: the route, no suffix behind it
+  const routed = mk('');
+  routed.router.sync({ setNavRouting: 'KEEP' }, { id: 'D1', app: 'Z_A', ...P3 });
+  routed.router.sync({ setPushState: '/x' }, { id: 'D2', app: 'Z_A', ...P3 });
+  assert.equal(routed.win.location.hash, '#/app/Z_A/D2');
+  assert.equal(reports.length, 2);
+  // the app-state hash is written and cleared as under protocol 2
+  plain.router.sync({ setAppStateActive: true }, { id: 'D5', app: 'Z_A', ...P3 });
+  assert.equal(plain.win.location.hash, '#/z2ui5-xapp-state=D5');
+  plain.router.sync({}, { id: 'D6', app: 'Z_A', ...P3 });
+  assert.equal(plain.win.location.hash, '');
 });
 
 test('actions: HASH_BACK takes its fallback, the ROUTER option names go to the router', () => {

@@ -16,6 +16,22 @@
   (release 1.3.0, was a4d9f07), whose `applyResponse` folds both wires; a
   weekly workflow (`bump-agent.yml`) re-vendors them from mcp-server's main
   through a PR from now on.
+- **Protocol 3 end to end**: the demo backend, the e2e tests and the
+  recorded fixtures run on `@abap2ui5/node-runtime` 1.151.0 (was 1.146.0),
+  so wire protocol 3 is now exercised against a real backend - and three
+  places that still assumed protocol 2 are fixed. An app start or a
+  Back/Forward restore sends the route of its hash as `S_FRONT.ROUTE`
+  (`#/app/<CLASS>[/<DRAFT>]`, `#/z2ui5-xapp-state=<DRAFT>`): a protocol-3
+  backend reads no route out of `HASH`, so a reload, a bookmark or the
+  browser Back button started the app afresh instead of restoring the
+  draft. The flags of an event wire are read from the options object
+  protocol 3 writes (`['EVENT', {queueLast:true,noBusy:true}]`), and still
+  from the positions protocol 2 wrote - a protocol-3 `queueLast` wire lost
+  its keystrokes and a `noBusy` one showed the busy overlay. Under
+  protocol 3 `hash_set` / `hash_replace` are written only for an app that
+  owns the hash, as the whole app hash, and reported otherwise (protocol 2
+  appended them to the page's hash). The tests read responses through the
+  vendored readers, whatever wire they come in.
 - **No busy overlay after the element is gone**: removing or restarting the
   element during a roundtrip left the overlay's 400 ms timer running.
 

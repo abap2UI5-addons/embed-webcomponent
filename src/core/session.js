@@ -10,7 +10,8 @@
  *   closeSlot(slot)   the frontend-only popup/popover close (no roundtrip)
  *   restore(hash)     the app-start-shaped request of a route the URL now
  *                     names (browser Back/Forward under hash routing): no ID,
- *                     the location, CONFIG and the new HASH
+ *                     the location, CONFIG, the new HASH and the ROUTE
+ *                     parsed from it
  *
  * Both wires are read, by the number the response declares (protocolOf of
  * the vendored snapshot.mjs): protocol 3 (abap2UI5 1.151.0 on) answers
@@ -45,6 +46,7 @@
 import { applyResponse, emptyState, modelKeyOf, protocolOf, viewChanges } from '../vendor/agent/snapshot.mjs';
 import { buildDelta } from '../vendor/agent/appclient.mjs';
 import { Model, createDeviceModel } from '../bindings/model.js';
+import { startRoute } from './router.js';
 
 /** The newest wire this frontend reads (protocol spec/versioning.md). */
 export const PROTOCOL = 3;
@@ -149,8 +151,8 @@ export class Session {
   /**
    * An app-start-shaped request for a route the URL now names (browser
    * Back/Forward under hash routing, spec/navigation.md "Routes"): no ID,
-   * the location, the full CONFIG and the new HASH - the backend restores
-   * the draft the route names. The screen stays until the answer replaces
+   * the location, the full CONFIG, the new HASH and the ROUTE parsed from
+   * it - the backend restores the draft the route names. The screen stays until the answer replaces
    * it; unsent edits belong to the screen being left and are dropped.
    */
   async restore(hash) {
@@ -165,6 +167,14 @@ export class Session {
     const front = { ORIGIN: where.origin, PATHNAME: where.pathname, SEARCH: where.search };
     const h = hash !== undefined ? hash : (where.hash !== undefined ? where.hash : this.hashOf());
     if (h) front.HASH = h;
+    // what the hash asks the app start to restore, parsed (spec/request.md
+    // "ROUTE"): a protocol-3 backend resolves the start from ROUTE and reads
+    // no hash structure, a protocol-2 backend ignores it and reads HASH -
+    // so it goes with every request without ID whose hash names a route or
+    // an app-state link, and never without a HASH (an embedded element
+    // whose host keeps the URL sends neither)
+    const route = h ? startRoute(h) : null;
+    if (route) front.ROUTE = route;
     // the session block on the app start (spec/request.md, CONFIG): the
     // device as S_DEVICE; no S_UI5 - there is no UI5 runtime here
     const device = this.deviceBlock();

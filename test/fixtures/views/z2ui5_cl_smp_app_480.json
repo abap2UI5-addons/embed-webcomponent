@@ -1,0 +1,24 @@
+{
+ "S_FRONT": {
+  "APP": "Z2UI5_CL_SMP_APP_480",
+  "ID": "FIXTURE",
+  "NAV": {
+   "setNavRouting": "KEEP"
+  },
+  "PROTOCOL": 3,
+  "VIEWS": {
+   "MAIN": {
+    "XML": "<mvc:View displayBlock=\"true\" height=\"100%\" xmlns=\"sap.m\" xmlns:mvc=\"sap.ui.core.mvc\" xmlns:form=\"sap.ui.layout.form\" xmlns:layout=\"sap.ui.layout\"><Shell><Page title=\"abap2UI5 - Hash - Routing mode keep\" showNavButton=\"false\" navButtonPress=\".eB(['___ZZZ_NAL'])\"><MessageStrip text=\"Add some state (type / raise the counter), open the detail page, then press your BROWSER Back button and watch this page.\" type=\"Information\" showIcon=\"true\" class=\"sapUiSmallMargin\"/><layout:Grid defaultSpan=\"L6 M12 S12\"><layout:content><form:SimpleForm title=\"Routing mode keep\"><form:content><Label text=\"1. Some state - type here\"/><Input value=\"{/INPUT}\"/><Label text=\"and raise a counter\"/><Button press=\".eB(['INC'])\" text=\"increment (0)\"/><Label text=\"2. Navigate forward\"/><Button press=\".eB(['GO_DETAIL'])\" text=\"go to the detail page (nav_app_call)\" type=\"Emphasized\"/></form:content></form:SimpleForm></layout:content></layout:Grid><MessageStrip text=\"keep: the URL carries the app-state draft (#/app/&lt;CLASS&gt;/&lt;DRAFT&gt;). After the detail page, the browser Back button restores this page EXACTLY - input and counter come back.\" type=\"Success\" showIcon=\"true\" class=\"sapUiSmallMargin\"/></Page></Shell></mvc:View>"
+   },
+   "POPOVER": {
+    "DESTROY": true
+   },
+   "POPUP": {
+    "DESTROY": true
+   }
+  }
+ },
+ "MODEL": {
+  "INPUT": ""
+ }
+}
