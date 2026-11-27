@@ -389,6 +389,21 @@ test('Avatar: an image source is checked like Image\'s', () => {
   assert.equal(good.querySelector('img').getAttribute('src'), 'https://h/a.png');
 });
 
+test('message box details: rebuilt from the tag whitelist of the UI5 frontend - no image, no attribute, no script text', async () => {
+  const { FrontendApp } = await import('../../src/ui/app.js');
+  const root = document.createElement('div');
+  document.body.appendChild(root);
+  const app = new FrontendApp({ root, host: root, endpoint: '/sap/bc/z2ui5', transport: { roundtrip: async () => ({ ok: true, status: 200, body: '{}' }), endSession() {} } });
+  app.mount();
+  app.messageBox('error', 'it broke', { details: '<p class="x" onclick="y()">detail <b>bold</b><br><img src="conformance-xss-probe" onerror="window.__x=1"></p>'
+    + '<ul><li><strong>a</strong><ol><li>nested</li></ol></li></ul><script>alert(1)</script><a href="javascript:x()">link</a><em>e</em>' });
+  const det = app.overlayEl.querySelector('.a2u-box-details');
+  assert.equal(det.innerHTML, '<p>detail bold<br></p><ul><li><strong>a</strong><ol><li>nested</li></ol></li></ul>link<em>e</em>');
+  assert.equal(det.querySelector('img'), null);
+  app.destroy();
+  root.remove();
+});
+
 /* the events of UI5 Web Components bubble: a nested control's event is not its parent's */
 test('a ComboBox in a list row: its selection-change leaves the rows\' selection alone', () => {
   const { render, models, events } = setup({ T: [{ SEL: true, K: '' }, { SEL: true, K: '' }] });

@@ -30,6 +30,14 @@
   dropped with its view (an app switch, its popup closed, an error, a
   route restore) - spec/transport.md "A user event that meets a timer
   tick".
+- **Message box details are rebuilt from a tag whitelist**: they went
+  through the FormattedText sanitizer, which strips handlers and script
+  URLs but keeps every other tag - an `<img>` in the details loaded its
+  `src`. They now keep what the UI5 frontend keeps (`ul`, `ol`, `li`,
+  `p`, `strong`, `em`, `br`, no attributes; script, style and template
+  dropped with their content, any other tag unwrapped to its text) -
+  found by the protocol's `message.details-sanitized`, which a shadow root
+  had hidden the image from until now.
 - **Back during a roundtrip under KEEP/FRESH routing**: the answer of the
   roundtrip wrote its route over the history entry the browser had gone
   back to; it now leaves the URL alone, and the restore of that entry

@@ -25,7 +25,7 @@ import registry from '../render/registry.js';
 import '../render/controls/index.js';
 import { CSS } from './styles.js';
 import { textsFor, resolveLanguage } from './texts.js';
-import { sanitizeHtml } from '../render/controls/common.js';
+import { sanitizeBoxDetails } from '../render/controls/common.js';
 
 const BOX_TYPES = ['confirm', 'error', 'warning', 'success', 'information', 'alert'];
 const BOX_STATE = { error: 'Negative', warning: 'Critical', success: 'Positive', information: 'Information', confirm: 'None', alert: 'None', show: 'None' };
@@ -397,9 +397,9 @@ export class FrontendApp {
     if (details) {
       const det = d.createElement('div');
       det.className = 'a2u-box-details';
-      // a string is formatted text, as in UI5's MessageBox (sanitized like
-      // FormattedText); anything else is shown as JSON
-      if (typeof details === 'string') det.replaceChildren(sanitizeHtml(d, details));
+      // a string is formatted text, rebuilt from the tag whitelist of the
+      // UI5 frontend; anything else is shown as JSON
+      if (typeof details === 'string') det.replaceChildren(sanitizeBoxDetails(d, details));
       else det.textContent = JSON.stringify(details, null, 2);
       dlg.appendChild(det);
     }
