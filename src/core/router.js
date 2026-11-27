@@ -408,6 +408,12 @@ export class Router {
       state.navFromHash = false;
       return;
     }
+    // a Back/Forward that came in while this roundtrip was in flight waits
+    // for its end (idle) and restores the route the URL now stands on: the
+    // answer of the roundtrip it overtook must not write its route over
+    // that entry - the restore supersedes it, and its own answer adopts
+    // the URL as it is
+    if (state.pending && state.pending.kind === 'route') return;
     // protocol 2: the app's suffix rides behind the route (sync writes it)
     if (!owned && (o.setPushState || o.setHashReplace)) return;
     const route = patternFor(app, draft);

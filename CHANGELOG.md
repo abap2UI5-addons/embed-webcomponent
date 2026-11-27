@@ -30,6 +30,11 @@
   dropped with its view (an app switch, its popup closed, an error, a
   route restore) - spec/transport.md "A user event that meets a timer
   tick".
+- **Back during a roundtrip under KEEP/FRESH routing**: the answer of the
+  roundtrip wrote its route over the history entry the browser had gone
+  back to; it now leaves the URL alone, and the restore of that entry
+  supersedes it.
+
 - **abap2UI5 1.151.0 and later work again**: their backend answers wire
   protocol 3 (`S_FRONT.VIEWS`, `NAV`, `ACTIONS` instead of the `S_ACTION`
   envelope), and the element refused every such answer with "Protocol
