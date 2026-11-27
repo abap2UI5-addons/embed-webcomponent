@@ -68,6 +68,27 @@ define('sap.m.Table', {
       api.report('property', 'sap.m.Table.mode Delete is not rendered');
     }
     const rows = () => [...table.querySelectorAll(':scope > ui5-table-row')];
+    /*
+     * An invisible Column renders no cells: UI5 leaves out the cell of every
+     * row at the index of the column (Table#getColumns, the cells are
+     * matched by position). The header cell is hidden by its visible
+     * binding; the row cells at its index follow it here - after every
+     * render of the rows and whenever a header cell's visibility changes.
+     */
+    const syncColumns = () => {
+      const hidden = [...headerRow.children].map((h) => h.hidden);
+      for (const r of rows()) {
+        [...r.children].filter((x) => x.localName === 'ui5-table-cell').forEach((cell, i) => {
+          const hide = !!hidden[i];
+          if (cell.hidden === hide) return;
+          cell.hidden = hide;
+          cell.style.display = hide ? 'none' : '';
+        });
+      }
+    };
+    if (typeof MutationObserver === 'function') {
+      new MutationObserver(syncColumns).observe(headerRow, { attributes: true, attributeFilter: ['hidden'], subtree: true });
+    }
     const syncSelection = () => {
       if (!feature) return;
       const keys = rows().filter((r) => r.__a2uSelected).map((r) => r.getAttribute('row-key'));
@@ -91,6 +112,7 @@ define('sap.m.Table', {
         if (!k.getAttribute('row-key')) k.setAttribute('row-key', String(i));
         table.appendChild(k);
       });
+      syncColumns();
       syncSelection();
     }, { groups, growing });
 
@@ -130,7 +152,7 @@ define('sap.m.Table', {
   defaultAggregation: 'items',
   read: {},
   status: 'basic',
-  note: 'columns, items (bound or static), header toolbar, noDataText, MultiSelect/SingleSelect via the selected binding, itemPress, selectionChange, growing (threshold, trigger text, scroll to load); no Delete mode, no grouping',
+  note: 'columns (an invisible one hides its cells), items (bound or static), header toolbar, noDataText, MultiSelect/SingleSelect via the selected binding, itemPress, selectionChange, growing (threshold, trigger text, scroll to load); no Delete mode, no grouping',
 });
 
 define('sap.m.Column', {
@@ -236,6 +258,8 @@ define('sap.m.List', {
       el.dispatchEvent(new CustomEvent('selection-change', { bubbles: true, detail: { selectedItems: [item], previouslySelectedItems: prev, a2uEmulated: true } }));
     }, true);
     el.addEventListener('selection-change', (ev) => {
+      // the selection-change of a ComboBox in a row bubbles up here
+      if (ev.target !== el) return;
       const sel = new Set((ev.detail && ev.detail.selectedItems) || []);
       for (const item of el.querySelectorAll(':scope > [data-ui5-control]')) {
         const now = sel.has(item);

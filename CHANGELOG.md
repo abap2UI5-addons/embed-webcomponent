@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+- **A nested control's event is no longer its parent's**: the events of
+  UI5 Web Components bubble, and the two-way bindings and event wires
+  listened to them from every descendant. A ComboBox in a list row reset
+  the `selected` of every row (the ComboBox's `selection-change` reached
+  the list), the toggle of an inner Panel fired the outer one's `expand`,
+  the tab select of an IconTabBar on a tab fired the outer bar's `select`,
+  and the `close` of a time picker in a dialog fired its `afterClose` and
+  took a popover down. An event counts only when the control itself fired
+  it - pointer and key events of the browser excepted, and a mapper that
+  needs its children's events says so (RadioButtonGroup).
+- **IconTabBar** selects among its own tabs and their sub-tabs only, not
+  the tabs of an IconTabBar inside one of them.
+- **Table**: an invisible `Column` hides the cells of its index in every
+  row, not just its header - the cell of a hidden key column showed under
+  the next header.
+- **RadioButton**: the button a selection deselects writes `false` to its
+  `selected` binding (UI5 `RadioButton#setSelected`), so the delta carries
+  both, as the UI5 frontend sends it.
 - **abap2UI5 1.151.0 and later work again**: their backend answers wire
   protocol 3 (`S_FRONT.VIEWS`, `NAV`, `ACTIONS` instead of the `S_ACTION`
   envelope), and the element refused every such answer with "Protocol

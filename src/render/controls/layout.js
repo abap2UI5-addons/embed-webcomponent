@@ -401,15 +401,33 @@ define('sap.m.Panel', {
 });
 
 /* IconTabBar -> ui5-tabcontainer; IconTabFilter -> ui5-tab (content inside). */
+
+/*
+ * The tabs of one tab container: its own ui5-tab children and their sub-tabs
+ * (slot="items") - not the tabs of an IconTabBar in a tab's content.
+ */
+function ownTabs(container) {
+  const out = [];
+  const walk = (parent, slot) => {
+    for (const t of parent.children) {
+      if (t.localName !== 'ui5-tab' || (t.getAttribute('slot') || '') !== slot) continue;
+      out.push(t);
+      walk(t, 'items');
+    }
+  };
+  walk(container, '');
+  return out;
+}
 const TAB_DESIGN = { Default: 'Default', Positive: 'Positive', Negative: 'Negative', Critical: 'Critical', Neutral: 'Neutral', Contrast: 'Default' };
 define('sap.m.IconTabBar', {
+  wc: '`ui5-tabcontainer` + `ui5-tab`',
   render(node, api) {
     const wrap = api.el('div', { class: 'a2u-icontabbar' });
     const el = api.el('ui5-tabcontainer', { 'content-background-design': 'Transparent' });
     wrap.appendChild(el);
     const a = node.attrs;
     let key;
-    const tabs = () => [...el.querySelectorAll('ui5-tab')];
+    const tabs = () => ownTabs(el);
     const keyOf = (t) => t.dataset.key || t.getAttribute('data-ui5-id') || '';
     const sync = () => {
       const all = tabs();
@@ -445,7 +463,7 @@ define('sap.m.IconTabBar', {
     return wrap;
   },
   defaultAggregation: 'items',
-  read: { selectedKey: (wrap) => { const t = [...wrap.querySelectorAll('ui5-tab')].find((x) => x.selected); return t ? (t.dataset.key || '') : ''; } },
+  read: { selectedKey: (wrap) => { const t = ownTabs(wrap.querySelector(':scope > ui5-tabcontainer')).find((x) => x.selected); return t ? (t.dataset.key || '') : ''; } },
   status: 'basic',
   note: 'tabs with text, icon, count, iconColor and content; selectedKey, select; no expand/collapse event, no drag & drop',
 });

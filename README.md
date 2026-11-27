@@ -332,7 +332,7 @@ Portable profile v1: **65 of 65** controls mapped (42 full, 23 basic).
 | sap.m.ToggleButton | `ui5-toggle-button` | full |  |
 | sap.m.Column | `ui5-table-header-cell` | basic | header, width, hAlign, minScreenWidth; no demandPopin/footer |
 | sap.m.ColumnListItem | `ui5-table-row` + `ui5-table-cell` | basic | cells, type (interactive rows), selected, press; highlight not shown |
-| sap.m.Table | `ui5-table` (+ header row/cells, `ui5-table-selection-multi`/`-single`) | basic | columns, items (bound or static), header toolbar, noDataText, MultiSelect/SingleSelect via the selected binding, itemPress, selectionChange, growing (threshold, trigger text, scroll to load); no Delete mode, no grouping |
+| sap.m.Table | `ui5-table` (+ header row/cells, `ui5-table-selection-multi`/`-single`) | basic | columns (an invisible one hides its cells), items (bound or static), header toolbar, noDataText, MultiSelect/SingleSelect via the selected binding, itemPress, selectionChange, growing (threshold, trigger text, scroll to load); no Delete mode, no grouping |
 | sap.m.List | `ui5-list` | basic | items (bound or static), headerText, mode, itemPress, selectionChange, delete, growing (threshold, trigger text, scroll to load); no grouping |
 | sap.m.StandardListItem | `ui5-li` | basic | title, description, icon, info, infoState, highlight, type, selected; no counter/avatar |
 | sap.m.CustomListItem | `ui5-li-custom` | full |  |

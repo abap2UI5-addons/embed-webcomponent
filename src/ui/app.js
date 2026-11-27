@@ -296,7 +296,10 @@ export class FrontendApp {
       if (opener) popup.opener = opener;
       else this.report({ kind: 'slot', detail: `POPOVER: opener '${options.openById}' not found` });
     }
-    popup.addEventListener('close', () => {
+    popup.addEventListener('close', (ev) => {
+      // the close of a picker inside (ui5-time-picker, a ComboBox) bubbles
+      // up here: only the popup's own close is one
+      if (ev.target !== popup) return;
       // closed by the user (Escape / outside click on a popover): the slot
       // goes locally, as the UI5 frontend's popover autoclose does
       if (!popup.__a2uClosing && slot === 'POPOVER' && this.slots.POPOVER === entry) this.session.closeSlot('POPOVER');

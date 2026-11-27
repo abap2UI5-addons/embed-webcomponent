@@ -389,6 +389,114 @@ test('Avatar: an image source is checked like Image\'s', () => {
   assert.equal(good.querySelector('img').getAttribute('src'), 'https://h/a.png');
 });
 
+/* the events of UI5 Web Components bubble: a nested control's event is not its parent's */
+test('a ComboBox in a list row: its selection-change leaves the rows\' selection alone', () => {
+  const { render, models, events } = setup({ T: [{ SEL: true, K: '' }, { SEL: true, K: '' }] });
+  const { host } = render(viewOf(`<List mode="MultiSelect" items="{/T}" selectionChange=".eB(['LIST_SEL'])"><items><CustomListItem selected="{SEL}">
+    <ComboBox selectedKey="{K}"><items><core:Item key="1" text="one"/></items></ComboBox></CustomListItem></items></List>`));
+  const cb = host.querySelector('ui5-combobox');
+  cb.dispatchEvent(new CustomEvent('selection-change', { bubbles: true, detail: { item: cb.firstElementChild } }));
+  assert.deepEqual(models[''].data.T.map((r) => r.SEL), [true, true]);
+  assert.ok(![...models[''].edited.keys()].some((p) => p.endsWith('/SEL')), 'no SEL in the delta');
+  assert.deepEqual(events.map((e) => e.wire.event), [], 'the list fired no selectionChange');
+  // the list's own selection-change still writes
+  const list = host.querySelector('ui5-list');
+  const items = [...list.children];
+  list.dispatchEvent(new CustomEvent('selection-change', { bubbles: true, detail: { selectedItems: [items[1]], previouslySelectedItems: items } }));
+  assert.deepEqual(models[''].data.T.map((r) => r.SEL), [false, true]);
+  assert.deepEqual(events.map((e) => e.wire.event), ['LIST_SEL']);
+});
+
+test('a Panel in a Panel: the inner toggle neither fires nor writes the outer one', () => {
+  const { render, models, events } = setup({ O: true, I: true });
+  const { host } = render(viewOf(`<Panel expandable="true" expanded="{/O}" expand=".eB(['OUTER'])">
+    <Panel expandable="true" expanded="{/I}" expand=".eB(['INNER'])"><Text text="x"/></Panel></Panel>`));
+  const inner = host.querySelectorAll('ui5-panel')[1];
+  inner.collapsed = true;
+  inner.dispatchEvent(new CustomEvent('toggle', { bubbles: true }));
+  assert.deepEqual(events.map((e) => e.wire.event), ['INNER']);
+  assert.deepEqual([...models[''].edited.keys()], ['/I']);
+  assert.deepEqual(models[''].data, { O: true, I: false });
+});
+
+test('an IconTabBar on a tab: its tabs are its own, its select is not the outer one\'s', () => {
+  const { render, models, events } = setup({ OUT: 'A', IN: 'Y' });
+  const { host } = render(viewOf(`<IconTabBar selectedKey="{/OUT}" select=".eB(['OUTER_SEL'])"><items>
+    <IconTabFilter key="A" text="A"><IconTabBar selectedKey="{/IN}" select=".eB(['INNER_SEL'])"><items>
+      <IconTabFilter key="X" text="X"/><IconTabFilter key="Y" text="Y"/></items></IconTabBar></IconTabFilter>
+    <IconTabFilter key="B" text="B"><items><IconTabFilter key="B1" text="B1"/></items></IconTabFilter></items></IconTabBar>`));
+  const tab = (k) => [...host.querySelectorAll('ui5-tab')].find((t) => t.dataset.key === k);
+  assert.deepEqual(['A', 'X', 'Y', 'B', 'B1'].map((k) => !!tab(k).selected), [true, false, true, false, false], 'each bar selects its own key');
+  const [outer, inner] = host.querySelectorAll('ui5-tabcontainer');
+  tab('Y').selected = false;
+  tab('X').selected = true;
+  inner.dispatchEvent(new CustomEvent('tab-select', { bubbles: true, detail: { tab: tab('X') } }));
+  assert.deepEqual(events.map((e) => e.wire.event), ['INNER_SEL']);
+  assert.deepEqual(models[''].data, { OUT: 'A', IN: 'X' });
+  // a sub-tab (IconTabFilter items) is one of the outer bar's tabs
+  models[''].replace({ OUT: 'B1', IN: 'X' });
+  assert.equal(!!tab('B1').selected, true);
+  assert.equal(!!tab('A').selected, false);
+  assert.equal(!!tab('X').selected, true, 'the inner bar keeps its key');
+  tab('B1').selected = false;
+  tab('B').selected = true;
+  outer.dispatchEvent(new CustomEvent('tab-select', { bubbles: true, detail: { tab: tab('B') } }));
+  assert.equal(models[''].data.OUT, 'B');
+  assert.deepEqual(events.map((e) => e.wire.event), ['INNER_SEL', 'OUTER_SEL']);
+});
+
+test('a picker inside a dialog: its close is no afterClose of the dialog', () => {
+  const { render, events } = setup({ T: '' });
+  const { host } = render(viewOf(`<Dialog title="d" afterClose=".eB(['CLOSED'])"><content><TimePicker value="{/T}"/></content></Dialog>`));
+  const picker = host.querySelector('ui5-time-picker');
+  picker.dispatchEvent(new CustomEvent('close', { bubbles: true }));
+  assert.deepEqual(events.map((e) => e.wire.event), []);
+  host.querySelector('ui5-dialog').dispatchEvent(new CustomEvent('close', { bubbles: true }));
+  assert.deepEqual(events.map((e) => e.wire.event), ['CLOSED']);
+});
+
+test('a RadioButtonGroup still hears the change of its buttons', () => {
+  const { render, models, events } = setup({ IDX: 0 });
+  const { host } = render(viewOf(`<RadioButtonGroup selectedIndex="{/IDX}" select=".eB(['SEL'])"><buttons><RadioButton text="a"/><RadioButton text="b"/></buttons></RadioButtonGroup>`));
+  const [a, b] = host.querySelectorAll('ui5-radio-button');
+  a.checked = false;
+  b.checked = true;
+  b.dispatchEvent(new CustomEvent('change', { bubbles: true }));
+  assert.equal(models[''].data.IDX, 1);
+  assert.deepEqual(events.map((e) => e.wire.event), ['SEL']);
+});
+
+test('a radio button selected: the one of its group it deselected writes false (UI5 RadioButton#setSelected)', () => {
+  const { render, models } = setup({ A: true, B: false, C: false });
+  const { host } = render(viewOf(`<RadioButton groupName="g" text="a" selected="{/A}"/><RadioButton groupName="g" text="b" selected="{/B}"/>
+    <RadioButton groupName="other" text="c" selected="{/C}"/>`));
+  const [a, b] = host.querySelectorAll('ui5-radio-button');
+  assert.equal(a.checked, true);
+  a.checked = false;
+  b.checked = true;
+  b.dispatchEvent(new CustomEvent('change', { bubbles: true }));
+  assert.deepEqual(models[''].data, { A: false, B: true, C: false });
+  assert.deepEqual([...models[''].edited.keys()].sort(), ['/A', '/B'], 'C is in another group');
+  assert.equal(a.checked, false);
+  assert.equal(b.checked, true);
+});
+
+test('an invisible Column hides the cells of its index in every row', async () => {
+  const { render, models } = setup({ SHOW: false, T: [{ K: 'secret', N: 'n' }, { K: 'secret2', N: 'm' }] });
+  const { host } = render(viewOf(`<Table items="{/T}"><columns><Column visible="{/SHOW}"><Text text="Key"/></Column><Column><Text text="Name"/></Column></columns>
+    <items><ColumnListItem><cells><Text text="{K}"/><Text text="{N}"/></cells></ColumnListItem></items></Table>`));
+  const cells = () => [...host.querySelectorAll('ui5-table-row')].map((r) => [...r.querySelectorAll(':scope > ui5-table-cell')].map((c) => (c.hidden ? '-' : c.textContent)));
+  assert.deepEqual([...host.querySelectorAll('ui5-table-header-cell')].map((c) => c.hidden), [true, false]);
+  assert.deepEqual(cells(), [['-', 'n'], ['-', 'm']]);
+  models[''].set('/SHOW', true);
+  await new Promise((r) => setTimeout(r, 0));
+  assert.deepEqual(cells(), [['secret', 'n'], ['secret2', 'm']]);
+  models[''].set('/T', [{ K: 'k3', N: 'o' }]);
+  models[''].set('/SHOW', false);
+  await new Promise((r) => setTimeout(r, 0));
+  assert.deepEqual(cells(), [['-', 'o']]);
+});
+
 test('the error dialog: Retry for a retryable error, one dialog at a time, gone on close', async () => {
   const { FrontendApp } = await import('../../src/ui/app.js');
   const { ProtocolError } = await import('../../src/core/session.js');

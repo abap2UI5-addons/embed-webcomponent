@@ -65,6 +65,26 @@ export function compiled(raw) {
   return c;
 }
 
+/*
+ * The events of UI5 Web Components bubble (selection-change, toggle,
+ * tab-select, change, close, ...): a ComboBox inside a list row, a Panel in
+ * a Panel or an IconTabBar on a tab reaches the listeners of the control
+ * around it. An event of a control is its own only when the control itself
+ * fired it - ev.target is the element (an event from its shadow DOM is
+ * retargeted to it). The pointer and key events of the browser start at
+ * whatever the user hit inside the element, so they count from a
+ * descendant, too; a mapper that needs a component event of its children
+ * says so with `descendants: true` (RadioButtonGroup: the change of its
+ * buttons).
+ */
+const DOM_EVENTS = new Set(['click', 'keydown', 'keyup']);
+
+/** True when `ev` belongs to the control whose element is `el`. */
+export function ownEvent(ev, el, spec) {
+  if (!ev || !ev.target || ev.target === el) return true;
+  return DOM_EVENTS.has(ev.type) || !!(spec && spec.descendants);
+}
+
 /* Attributes every control has, handled here and not by the mappers. */
 const COMMON = new Set(['id', 'class', 'visible', 'binding', 'tooltip', 'fieldGroupIds', 'busy', 'busyIndicatorDelay', 'busyIndicatorSize', 'blocked']);
 const IGNORED_ATTR = /^(xmlns(:.*)?|core:require|.*:require|displayBlock|controllerName|templateShareable|ariaLabelledBy|ariaDescribedBy|width|height)$/;
@@ -422,15 +442,30 @@ export class Renderer {
           };
           // capture: at the target, capturing listeners run before the event
           // wires - the model holds the new value when the roundtrip reads it
-          for (const evn of [].concat(tw.event)) el.addEventListener(evn, () => write(true), true);
-          if (tw.live) el.addEventListener(tw.live, () => write(false), true);
+          for (const evn of [].concat(tw.event)) el.addEventListener(evn, (ev) => { if (ownEvent(ev, el, tw)) write(true); }, true);
+          if (tw.live) el.addEventListener(tw.live, (ev) => { if (ownEvent(ev, el, tw)) write(false); }, true);
+          // a write from outside the event (a radio button deselected by
+          // its group, which fires nothing): the value given, not the read
+          if (tw.expose) {
+            el[tw.expose] = {
+              get: () => { const t = b.target(c); return t ? t.model.get(t.path) : undefined; },
+              set: (v, notify = true) => {
+                const t = b.target(c);
+                if (!t) return;
+                b.reset();
+                t.model.set(t.path, b.parse(v), { notify });
+              },
+            };
+          }
         }
         return b;
       },
 
       /**
        * An event attribute: parse the wire and fire it on `spec.on`.
-       * spec.params(ev, el) -> the UI5 event parameters.
+       * spec.params(ev, el) -> the UI5 event parameters; an event a
+       * descendant fired is not the control's (ownEvent) unless
+       * spec.descendants.
        */
       wire(el, attr, spec, c = ctx, node = api.node) {
         const raw = node.attrs[attr];
@@ -439,7 +474,10 @@ export class Renderer {
           r.report({ kind: 'event', detail: `${control}.${attr}: handler ${String(raw).slice(0, 60)} is no abap2UI5 wire`, control });
           return;
         }
+        const on = Array.isArray(spec.on) ? spec.on : [spec.on];
+        const target = spec.target ? spec.target(el) : el;
         const handler = (ev) => {
+          if (!ownEvent(ev, target, spec)) return;
           if (spec.filter && !spec.filter(ev, el)) return;
           if (w.veto && ev && typeof ev.preventDefault === 'function') ev.preventDefault();
           if (spec.before) spec.before(ev, el);
@@ -449,8 +487,6 @@ export class Renderer {
           });
           r.onEvent({ slot: c.slot, wire: w, args, el, control, attr });
         };
-        const on = Array.isArray(spec.on) ? spec.on : [spec.on];
-        const target = spec.target ? spec.target(el) : el;
         for (const name of on) target.addEventListener(name, handler);
       },
 
