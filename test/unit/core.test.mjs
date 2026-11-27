@@ -239,6 +239,32 @@ test('a user event that meets a timer tick waits for it and goes out with the id
   assert.equal(t.sent[2].S_FRONT.TIMER, undefined);
 });
 
+test('a queue-last event that meets a timer tick is kept once, not also queued', async () => {
+  const t = gated('TICK', (n) => answer3(`D${n}`, n === 1 ? { views: { MAIN: { XML } }, model: {} } : {}));
+  const s = session(t);
+  await s.start('Z_APP');
+  const tick = s.fire('MAIN', 'TICK', [], { noBusy: true, timer: true });
+  assert.deepEqual(await s.fire('MAIN', 'LIVE', [], { queueLast: true }), { kept: true });
+  assert.equal(s.queued, null);
+  t.release();
+  await tick;
+  await settle();
+  assert.deepEqual(t.sent.map((b) => b.S_FRONT.EVENT), [undefined, 'TICK', 'LIVE'], 'sent once');
+});
+
+test('a second queue-last event during a tick is queued behind the kept one', async () => {
+  const t = gated('TICK', (n) => answer3(`D${n}`, n === 1 ? { views: { MAIN: { XML } }, model: {} } : {}));
+  const s = session(t);
+  await s.start('Z_APP');
+  const tick = s.fire('MAIN', 'TICK', [], { noBusy: true, timer: true });
+  assert.deepEqual(await s.fire('MAIN', 'LIVE1', [], { queueLast: true }), { kept: true });
+  assert.deepEqual(await s.fire('MAIN', 'LIVE2', [], { queueLast: true }), { dropped: true });
+  t.release();
+  await tick;
+  await settle();
+  assert.deepEqual(t.sent.map((b) => b.S_FRONT.EVENT), [undefined, 'TICK', 'LIVE1', 'LIVE2']);
+});
+
 test('the event a tick kept is dropped with its view: an app switch, an error, a route restore', async () => {
   const other = gated('TICK', (n) => answer3(`D${n}`, n === 1 ? { views: { MAIN: { XML } }, model: {} } : { app: 'Z_OTHER', views: { MAIN: { XML } } }));
   const s1 = session(other);
@@ -289,6 +315,30 @@ test('a view the response displays anew takes the unsent edits of the old one wi
   assert.equal(s.models.MAIN.edited.size, 0);
   await s.fire('MAIN', 'B_EVENT');
   assert.equal(t.sent[2].MODEL, undefined);
+});
+
+test('the same view re-displayed in its slot drops the edits made while a noBusy roundtrip or tick was in flight', async () => {
+  // intended: the UI5 frontend re-creates the view and its model
+  // (core/actions/Slots.js createViewModel), the unsent edits go with it
+  for (const flags of [{ noBusy: true }, { noBusy: true, timer: true }]) {
+    const t = gated('SLOW', (n) => [
+      answer3('D1', { views: { MAIN: { XML } }, model: { NAME: 'a', N: 1 } }),
+      answer3('D2', { views: { MAIN: { XML } }, model: { NAME: 'a', N: 2 } }),
+      answer3('D3'),
+    ][n - 1]);
+    const s = session(t);
+    await s.start('Z_A');
+    const slow = s.fire('MAIN', 'SLOW', [], flags);
+    s.models.MAIN.set('/NAME', 'typed');
+    t.release();
+    await slow;
+    await settle();
+    assert.deepEqual(s.models.MAIN.data, { NAME: 'a', N: 2 }, JSON.stringify(flags));
+    assert.equal(s.models.MAIN.edited.size, 0);
+    await s.fire('MAIN', 'GO');
+    assert.equal(t.sent[2].S_FRONT.EVENT, 'GO');
+    assert.equal(t.sent[2].MODEL, undefined, 'no edit of the old view goes out');
+  }
 });
 
 test('a model push without a new view keeps the edits it did not carry', async () => {

@@ -236,16 +236,18 @@ export class Session {
    */
   async fire(slot, event, args = [], flags = {}) {
     if (this.busy) {
-      if (flags.queueLast) this.queued = { slot, event, args, flags };
       // a tick is no roundtrip the user started or can see: the first user
       // event that meets one waits for its response and goes out then,
       // with the id that response names (spec/transport.md "A user event
-      // that meets a timer tick"); a second one meets the busy guard
+      // that meets a timer tick"); a second one meets the busy guard. The
+      // tick check comes first: a queue-last event the tick keeps is not
+      // queued as well - it would go out twice once the tick is answered
       if (this.tickInFlight && !flags.timer && !this.tickKept) {
         this.tickKept = { slot, event, args, flags };
         this.emit('busy', { busy: true, silent: false });
         return { kept: true };
       }
+      if (flags.queueLast) this.queued = { slot, event, args, flags };
       return { dropped: true };
     }
     const key = flags.useMainModel ? 'MAIN' : modelKeyOf(slot);
@@ -395,7 +397,12 @@ export class Session {
     // a view the response displays anew has a new model: the edits made in
     // the old one are gone with it - written over the new data they would
     // go out with the new view's next event, as attributes nobody edited
-    // there (spec/request.md: MODEL names only the attributes edited)
+    // there (spec/request.md: MODEL names only the attributes edited).
+    // Deliberately also for the SAME view re-displayed in the same slot by
+    // the answer of a noBusy roundtrip or a timer tick: an edit typed while
+    // it was in flight is dropped, as the UI5 frontend drops it when it
+    // re-creates the view (core/actions/Slots.js createViewModel) - only a
+    // model push without a view keeps the edits it did not carry
     const rebuilt = rebuiltModels(response);
     for (const key of MODEL_KEYS) {
       if (rebuilt.has(key)) this.models[key].edited.clear();
