@@ -1,0 +1,120 @@
+# src/vendor/agent/ is three modules of abap2UI5/mcp-server (lib/viewxml.mjs,
+# lib/snapshot.mjs, lib/appclient.mjs), copied by scripts/vendor-agent.mjs at
+# the COMMIT src/vendor/agent/source.json records. The pin is code, so it
+# never follows a branch - but nothing moved it either, and it went stale in
+# the way that hurts most: abap2UI5 1.151.0 answers wire protocol 3, the
+# copy pinned then folded only protocol 2's S_ACTION envelope, and main
+# stayed green. This workflow moves the pin: once a week it re-vendors from
+# mcp-server's main, runs the check job's gate (lint, unit tests, the
+# vendored-file check, the build) and opens a PR.
+#
+# A new mcp-server commit that touched none of the three modules would only
+# move the commit in every header and in source.json; the regenerate step
+# skips that case, so a PR here always carries a change of the vendored
+# code. A RED run means the new copy does not fit this repository as it is:
+# re-vendor by hand (`npm run vendor -- <checkout> --ref <commit>`) and
+# change the callers (src/core/session.js first) with it.
+
+name: bump-agent
+
+on:
+  schedule:
+    - cron: "37 7 * * 1" # Mondays 07:37 UTC, off the full-hour spikes
+  workflow_dispatch:
+  # Fired by the upstream repository when a relevant change merges, so the
+  # bump lands the same day instead of waiting for the weekly schedule
+  # (send a repository_dispatch with this event type via the GitHub API).
+  repository_dispatch:
+    types: [bump-agent]
+
+permissions:
+  contents: write
+  pull-requests: write
+  # To start ci.yml - with the e2e suite - on the PR's branch (below).
+  actions: write
+
+jobs:
+  bump-agent:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      # No write token left in .git/config while npm installs and the tests
+      # run; create-pull-request authenticates on its own.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Re-vendor from mcp-server's main
+        id: vendor
+        run: |
+          set -euo pipefail
+          MCP="$RUNNER_TEMP/mcp-server"
+          # full history, blobs on demand: the pinned commit has to be there
+          # for the comparison below
+          git clone --quiet --filter=blob:none https://github.com/abap2UI5/mcp-server.git "$MCP"
+          OLD=$(node -p 'require("./src/vendor/agent/source.json").commit')
+          NEW=$(git -C "$MCP" rev-parse HEAD)
+          echo "old=$OLD" >> "$GITHUB_OUTPUT"
+          echo "new=$NEW" >> "$GITHUB_OUTPUT"
+          if [ "$OLD" = "$NEW" ]; then
+            echo "::notice::the agent modules are pinned to mcp-server's main already ($NEW)"
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if git -C "$MCP" cat-file -e "$OLD^{commit}" 2>/dev/null \
+            && git -C "$MCP" diff --quiet "$OLD" "$NEW" -- \
+              lib/viewxml.mjs lib/snapshot.mjs lib/appclient.mjs; then
+            echo "::notice::mcp-server ${OLD:0:12}..${NEW:0:12} changed none of the vendored modules - pin left as it is"
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          node scripts/vendor-agent.mjs "$MCP" --ref "$NEW"
+          node scripts/vendor-agent.mjs "$MCP" --check
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+
+      # The gate: the check job of ci.yml. The e2e suite (demo backend,
+      # Playwright) runs on the PR's branch through the dispatch below.
+      - if: steps.vendor.outputs.changed == 'true'
+        run: npm ci
+      - if: steps.vendor.outputs.changed == 'true'
+        run: npm run lint
+      - if: steps.vendor.outputs.changed == 'true'
+        run: npm test
+      - if: steps.vendor.outputs.changed == 'true'
+        run: npm run build
+
+      - if: steps.vendor.outputs.changed == 'true'
+        id: pr
+        uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
+        with:
+          branch: bump-agent
+          title: "chore: re-vendor the agent modules from mcp-server's main"
+          commit-message: "chore: re-vendor the agent modules from mcp-server's main"
+          add-paths: src/vendor/agent
+          delete-branch: true
+          body: |
+            Weekly re-vendor of `src/vendor/agent/` (mcp-server's
+            `lib/viewxml.mjs`, `lib/snapshot.mjs`, `lib/appclient.mjs`)
+            through `scripts/vendor-agent.mjs`, from
+            abap2UI5/mcp-server@${{ steps.vendor.outputs.old }} to
+            abap2UI5/mcp-server@${{ steps.vendor.outputs.new }}
+            ([compare](https://github.com/abap2UI5/mcp-server/compare/${{ steps.vendor.outputs.old }}...${{ steps.vendor.outputs.new }})).
+
+            `npm run lint`, `npm test` and `npm run build` ran green in the
+            workflow that opened this PR; `ci.yml` with the e2e suite is
+            started on this branch. Read mcp-server's changelog before
+            merging: `applyResponse` decides what every slot shows, and a
+            new wire feature upstream may need a caller here
+            (`src/core/session.js`).
+
+      # A PR made with the workflow's own GITHUB_TOKEN starts no workflow
+      # runs - GitHub's rule against loops - so ci.yml would never run on
+      # it. workflow_dispatch is exempt.
+      - if: steps.pr.outputs.pull-request-operation == 'created' || steps.pr.outputs.pull-request-operation == 'updated'
+        run: gh workflow run ci.yml --ref bump-agent
+        env:
+          GH_TOKEN: ${{ github.token }}

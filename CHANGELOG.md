@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+- **abap2UI5 1.151.0 and later work again**: their backend answers wire
+  protocol 3 (`S_FRONT.VIEWS`, `NAV`, `ACTIONS` instead of the `S_ACTION`
+  envelope), and the element refused every such answer with "Protocol
+  mismatch: this frontend speaks 2". It now reads protocol 3 and still
+  reads protocol 2 (`PROTOCOLS`, exported next to `PROTOCOL`, which is 3),
+  by the number each response declares: VIEWS in slot order (MAIN, NEST,
+  NEST2, POPUP, POPOVER), NAV as the URL intent, ACTIONS as the follow-up
+  actions, no popup teardown of its own on an app change (the backend
+  states it), and a `START_TIMER` tick marked `TIMER`. The vendored
+  mcp-server modules move to
+  [8a95a6a](https://github.com/abap2UI5/mcp-server/commit/8a95a6a61560d785a4a0b6688f1faa6b27e8fc49)
+  (release 1.3.0, was a4d9f07), whose `applyResponse` folds both wires; a
+  weekly workflow (`bump-agent.yml`) re-vendors them from mcp-server's main
+  through a PR from now on.
+- **No busy overlay after the element is gone**: removing or restarting the
+  element during a roundtrip left the overlay's 400 ms timer running.
+
 - **Renamed to `embed-webcomponent`**: the repository is
   abap2UI5-addons/embed-webcomponent (was abap2UI5/frontend-webcomponent; GitHub redirects
   the old address), and the npm package `@abap2ui5/embed-webcomponent` (was

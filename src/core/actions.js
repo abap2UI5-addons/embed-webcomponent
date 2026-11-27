@@ -118,7 +118,7 @@ export function createActions({ ui, fire, closeSlot, report }) {
       clearTimeout(timers.get(name));
       timers.set(name, setTimeout(() => {
         timers.delete(name);
-        fire(slot, String(event), [], { noBusy: noBusy === true || noBusy === 'X' || noBusy === 'true' });
+        fire(slot, String(event), [], { noBusy: noBusy === true || noBusy === 'X' || noBusy === 'true', timer: true });
       }, Number(delay) || 0));
     },
     SET_FOCUS: (a) => ui.focus(String(a[1] || ''), a[2], a[3]),

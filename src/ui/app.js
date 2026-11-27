@@ -182,6 +182,10 @@ export class FrontendApp {
 
   destroy() {
     this.actions.cancelTimers();
+    // the delayed busy overlay of a roundtrip still under way: the session's
+    // end drops that roundtrip without a busy-off, so nothing else clears it
+    clearTimeout(this.busyTimer);
+    this.busyTimer = null;
     if (this.router) this.router.stop();
     this.clearSlots();
     this.session.end();

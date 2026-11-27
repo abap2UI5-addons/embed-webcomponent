@@ -1,18 +1,29 @@
 /* The core protocol client: requests, delta, slots, transport, actions. */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { Session, PROTOCOL, httpErrorText, ERROR_TEXT_MAX } from '../../src/core/session.js';
+import { Session, PROTOCOL, PROTOCOLS, httpErrorText, ERROR_TEXT_MAX } from '../../src/core/session.js';
 import { createFetchTransport, isValidContextId } from '../../src/core/transport.js';
 import { createActions, isSameOriginUrl } from '../../src/core/actions.js';
 
 const view = (slot, xml = '<mvc:View xmlns:mvc="sap.ui.core.mvc"/>', options) => ['VIEW_SLOTS', 'display', slot, xml, options];
+/* a protocol-2 answer (abap2UI5 up to 1.150.0): the S_ACTION envelope */
 const answer = (id, { app = 'Z_APP', system = [], custom = [], model } = {}) => {
-  const r = { S_FRONT: { ID: id, APP: app, PROTOCOL, S_ACTION: {} } };
+  const r = { S_FRONT: { ID: id, APP: app, PROTOCOL: 2, S_ACTION: {} } };
   if (system.length) r.S_FRONT.S_ACTION.T_SYSTEM = system;
   if (custom.length) r.S_FRONT.S_ACTION.T_CUSTOM = custom;
   if (model !== undefined) r.MODEL = model;
   return r;
 };
+/* a protocol-3 answer (abap2UI5 1.151.0 on): VIEWS, NAV, ACTIONS */
+const answer3 = (id, { app = 'Z_APP', views, nav, actions, model } = {}) => {
+  const r = { S_FRONT: { ID: id, APP: app, PROTOCOL: 3 } };
+  if (views) r.S_FRONT.VIEWS = views;
+  if (nav) r.S_FRONT.NAV = nav;
+  if (actions) r.S_FRONT.ACTIONS = actions;
+  if (model !== undefined) r.MODEL = model;
+  return r;
+};
+const XML = '<mvc:View xmlns:mvc="sap.ui.core.mvc"/>';
 
 function scripted(responses) {
   const sent = [];
@@ -78,6 +89,61 @@ test('popup model is its own; an APP change tears down popup and popover', async
   assert.equal(s.state.slots.POPUP, undefined, 'APP change closes the popup');
 });
 
+test('protocol 3: VIEWS in slot order, NAV as the router options, ACTIONS as the follow-up actions', async () => {
+  assert.equal(PROTOCOL, 3);
+  assert.deepEqual([...PROTOCOLS], [2, 3]);
+  const t = scripted([
+    answer3('D1', {
+      views: { POPUP: { XML: '<core:FragmentDefinition xmlns:core="sap.ui.core"/>' }, MAIN: { XML, OPT: { transition: 'slide' } } },
+      nav: { setNavRouting: 'KEEP' },
+      actions: [['MESSAGE_TOAST', 'show', 'hi']],
+      model: { A: 1 },
+    }),
+    answer3('D2', { views: { POPUP: { DESTROY: true } } }),
+  ]);
+  const s = session(t);
+  const seen = [];
+  s.on('response', (r) => seen.push(r));
+  await s.start('Z_APP');
+  assert.equal(s.protocol, 3);
+  assert.equal(s.state.id, 'D1');
+  assert.ok(s.state.slots.MAIN && s.state.slots.POPUP, 'MAIN applied before POPUP, whatever the key order');
+  assert.deepEqual(s.state.slots.MAIN.options, { transition: 'slide' });
+  assert.deepEqual(s.models.MAIN.data, { A: 1 });
+  assert.deepEqual(seen[0].routerOptions, { setNavRouting: 'KEEP' });
+  assert.deepEqual(seen[0].custom, [['MESSAGE_TOAST', 'show', 'hi']]);
+  await s.fire('MAIN', 'CLOSE');
+  assert.equal(s.state.slots.POPUP, undefined, 'a DESTROY entry tears the slot down');
+  assert.ok(s.state.slots.MAIN, 'a slot the response does not name stays');
+  assert.deepEqual(seen[1].routerOptions, {}, 'no NAV, no options');
+});
+
+test('protocol 3: an APP change leaves a slot the response does not name as it is', async () => {
+  const t = scripted([
+    answer3('D1', { views: { MAIN: { XML }, POPOVER: { XML: '<core:FragmentDefinition xmlns:core="sap.ui.core"/>' } } }),
+    answer3('D2', { app: 'Z_OTHER' }),
+    answer3('D3', { app: 'Z_THIRD', views: { POPOVER: { DESTROY: true } } }),
+  ]);
+  const s = session(t);
+  await s.start('Z_APP');
+  await s.fire('MAIN', 'GO');
+  assert.ok(s.state.slots.POPOVER, 'the backend states the teardown - none stated, none done');
+  await s.fire('MAIN', 'GO');
+  assert.equal(s.state.slots.POPOVER, undefined);
+});
+
+test('a START_TIMER tick carries TIMER for a protocol-3 backend only', async () => {
+  const t = scripted([answer3('D1', { views: { MAIN: { XML } } }), answer3('D2'), answer('D3'), answer('D4')]);
+  const s = session(t);
+  await s.start('Z_APP');
+  await s.fire('MAIN', 'TICK', [], { timer: true });
+  assert.equal(t.sent[1].S_FRONT.TIMER, true);
+  await s.fire('MAIN', 'GO');
+  assert.equal(t.sent[2].S_FRONT.TIMER, undefined, 'only a tick');
+  await s.fire('MAIN', 'TICK', [], { timer: true });
+  assert.equal(t.sent[3].S_FRONT.TIMER, undefined, 'the last answer spoke protocol 2');
+});
+
 test('closeSlot is local and drops the slot edits', async () => {
   const t = scripted([answer('D1', { system: [view('MAIN'), view('POPOVER', '<x/>', { openById: 'b' })], model: { A: 1 } })]);
   const s = session(t);
@@ -99,7 +165,7 @@ test('errors: the body verbatim, the status without one, protocol mismatch, netw
   ]);
   t.roundtrip = ((orig) => async (b) => {
     const r = await orig(b);
-    if (r.body && r.body.includes('"ID":"X"')) return { ok: true, status: 200, body: r.body.replace(`"PROTOCOL":${PROTOCOL}`, '"PROTOCOL":99') };
+    if (r.body && r.body.includes('"ID":"X"')) return { ok: true, status: 200, body: r.body.replace('"PROTOCOL":2', '"PROTOCOL":99') };
     return r;
   })(t.roundtrip);
   const s = session(t);
@@ -265,7 +331,7 @@ test('START_TIMER fires its event once, a new roundtrip cancels it', async () =>
   const a = createActions({ ui: {}, fire: (...x) => fired.push(x), closeSlot() {}, report() {} });
   a.run(['START_TIMER', 'TICK', '5', 'X']);
   await new Promise((r) => setTimeout(r, 30));
-  assert.deepEqual(fired, [['MAIN', 'TICK', [], { noBusy: true }]]);
+  assert.deepEqual(fired, [['MAIN', 'TICK', [], { noBusy: true, timer: true }]]);
   a.run(['START_TIMER', 'TICK', '5']);
   a.cancelTimers();
   await new Promise((r) => setTimeout(r, 30));
