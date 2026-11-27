@@ -16,17 +16,19 @@
  * The URL holds the RAW hash without '#': inside the SAP Fiori launchpad
  * the shell owns the part before '&/' (splitHash), and a write keeps it.
  *
- * Per response the frontend calls sync(options, { id, app }) once, after
- * the views are built and before the follow-up actions run - with the
- * options of the response's ROUTER action, or {} when it carries none (the
- * new draft id goes into a KEEP route either way). The router decides one
+ * Per response the frontend calls sync(options, { id, app, protocol })
+ * once, after the views are built and before the follow-up actions run -
+ * with the response's URL intent (NAV under protocol 3, the options of the
+ * ROUTER action under 2), or {} when it carries none (the new draft id goes
+ * into a KEEP route either way). The router decides one
  * outcome from them: adopt the hash, push a route, replace it, write the
  * app's own hash, write or clear the app-state hash.
  *
  * Hash changes it did not write (browser Back/Forward, a manual edit; the
  * History API fires no event for its own writes) come in through the URL's
  * listen(): under routing a route that names another app state is restored
- * by an app-start-shaped request (navigate(hash)), with app-owned routing
+ * by an app-start-shaped request (navigate(hash); the request names what
+ * to restore as S_FRONT.ROUTE, startRoute), with app-owned routing
  * the registered event is raised (raise(event, hash)). Both wait while a
  * roundtrip runs and go out when it ends (idle()).
  */
@@ -73,6 +75,33 @@ export function parseRoute(hash) {
   }
   if (!parts[0]) return null;
   return { app: parts[0], draft: parts.length > 1 ? parts[1] : '' };
+}
+
+const APP_STATE_PARAM = 'z2ui5-xapp-state=';
+
+/** The draft of an app-state link (`z2ui5-xapp-state=<DRAFT>` among the `&`-parts of the app hash, behind a `?` when there is one), or ''. */
+export function appStateOf(hash) {
+  const app = splitHash(hash).app.replace(/^\/+/, '');
+  const query = app.includes('?') ? app.slice(app.indexOf('?') + 1) : app;
+  for (const part of query.split('&')) {
+    if (part.toLowerCase().startsWith(APP_STATE_PARAM)) return part.slice(APP_STATE_PARAM.length);
+  }
+  return '';
+}
+
+/**
+ * What a hash asks an app start to restore, parsed as the request's
+ * S_FRONT.ROUTE (spec/request.md "ROUTE"; the UI5 frontend's
+ * Router.startRoute): { APP, DRAFT? } for a route, { APP_STATE } for an
+ * app-state link, null for anything else. A protocol-3 backend reads no
+ * hash structure - without ROUTE a restore starts what SEARCH names; a
+ * protocol-2 backend ignores the field and reads HASH as before.
+ */
+export function startRoute(hash) {
+  const route = parseRoute(hash);
+  if (route) return route.draft ? { APP: route.app, DRAFT: route.draft } : { APP: route.app };
+  const appState = appStateOf(hash);
+  return appState ? { APP_STATE: appState } : null;
 }
 
 /** The page's own URL hash. Writes go through the History API (no hashchange echo). */
@@ -265,25 +294,27 @@ export class Router {
   }
 
   /**
-   * Once per response, after rendering: `options` = the ROUTER action's
-   * options ({} without one), `id` the response's draft id, `app` its APP.
+   * Once per response, after rendering: `options` = the URL intent (NAV
+   * under protocol 3, the ROUTER action's options under 2; {} without one),
+   * `id` the response's draft id, `app` its APP, `protocol` the wire the
+   * response spoke (2 when not given).
+   *
+   * An app's own hash (setPushState / setHashReplace) is where the two
+   * wires part (spec/versioning.md "What protocol 3 broke"): protocol 3
+   * writes it only for an app that owns the hash - a listener registered,
+   * hash routing off - as the whole app hash, and reports it otherwise;
+   * protocol 2 appended it to the hash the page had, behind the route
+   * under KEEP routing.
    */
-  sync(options = {}, { id, app } = {}) {
+  sync(options = {}, { id, app, protocol = 2 } = {}) {
     const o = options && typeof options === 'object' ? options : {};
     const state = this.state;
+    if (protocol >= 3) {
+      this.syncOwned(o, id, app);
+      return;
+    }
     try {
-      if (o.setNavRouting) {
-        const mode = String(o.setNavRouting).toUpperCase();
-        const on = mode === 'KEEP' || mode === 'FRESH';
-        state.navRouting = on;
-        state.navMode = on ? mode : null;
-      }
-      if (o.setHashEvent) {
-        state.hashEvent = String(o.setHashEvent).trim() || null;
-        // the hash the URL stands on is the app's known value: the first
-        // CHANGE dispatches, not the registration's own render
-        state.appHash = appHashOf(this.url.get());
-      }
+      this.applyMode(o);
       const appWrite = o.setPushState || o.setHashReplace;
       const push = Boolean(o.setPushState);
 
@@ -318,7 +349,54 @@ export class Router {
     }
   }
 
-  updateAppRoute(o, id, app) {
+  /** sync( ) of protocol 3 - the UI5 frontend's core/Router.js sync, rule by rule. */
+  syncOwned(o, id, app) {
+    const state = this.state;
+    try {
+      this.applyMode(o);
+      const appWrite = o.setPushState || o.setHashReplace;
+      const owner = !state.navRouting && Boolean(state.hashEvent);
+      if (appWrite && !owner) {
+        this.report({
+          kind: 'router',
+          detail: `hash_set / hash_replace need the app to own the hash - '${appWrite}' is not written (${state.navRouting ? 'under hash routing the hash is the router\'s' : 'no listener is registered'})`,
+        });
+      }
+      if (state.navRouting) {
+        if (app) this.updateAppRoute(o, id, app, true);
+        return;
+      }
+      if (appWrite && owner) {
+        state.appHash = appHashOf(appWrite);
+        this.write(appWrite, Boolean(o.setPushState));
+        return;
+      }
+      if (state.hashEvent) return;
+      const next = o.setAppStateActive ? `/z2ui5-xapp-state=${id || ''}` : '';
+      if (state.knownHash !== next) this.write(next, false);
+    } catch (e) {
+      this.report({ kind: 'router', detail: `hash update failed: ${e.message}` });
+    }
+  }
+
+  /** setNavRouting and setHashEvent: the routing mode and the app-owned listener. */
+  applyMode(o) {
+    const state = this.state;
+    if (o.setNavRouting) {
+      const mode = String(o.setNavRouting).toUpperCase();
+      const on = mode === 'KEEP' || mode === 'FRESH';
+      state.navRouting = on;
+      state.navMode = on ? mode : null;
+    }
+    if (o.setHashEvent) {
+      state.hashEvent = String(o.setHashEvent).trim() || null;
+      // the hash the URL stands on is the app's known value: the first
+      // CHANGE dispatches, not the registration's own render
+      state.appHash = appHashOf(this.url.get());
+    }
+  }
+
+  updateAppRoute(o, id, app, owned = false) {
     const state = this.state;
     // FRESH routes carry the class only, KEEP routes the draft too
     const draft = state.navMode === 'FRESH' ? null : id;
@@ -330,7 +408,8 @@ export class Router {
       state.navFromHash = false;
       return;
     }
-    if (o.setPushState || o.setHashReplace) return;
+    // protocol 2: the app's suffix rides behind the route (sync writes it)
+    if (!owned && (o.setPushState || o.setHashReplace)) return;
     const route = patternFor(app, draft);
     if (o.checkNavAppCall) {
       // a nav_app_call: point the caller's entry at the draft saved at the

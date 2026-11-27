@@ -288,14 +288,45 @@ export function evalChain(src, env) {
 evalChain.UNKNOWN = UNKNOWN;
 
 const truthy = (f) => f === true || f === 'true' || f === 'X';
+const FLAG_KEYS = ['useMainModel', 'queueLast', 'noBusy'];
 
-/** parseWire + the flags of the event array, named. */
+/*
+ * The options object of a protocol-3 event array, as its source text
+ * (`{queueLast:true,noBusy:true}`, profiles/ui5.md "The options of a
+ * wire") -> the flags it sets, read by key, an absent key false; null when
+ * the text is no object literal. Keys may be quoted, values are the
+ * literals true/false (or their string forms) - anything else is false.
+ */
+function optionsOf(text) {
+  const m = /^\{([\s\S]*)\}$/.exec(String(text || '').trim());
+  if (!m) return null;
+  const out = {};
+  for (const entry of m[1].split(',')) {
+    const kv = /^\s*(?:'([^']*)'|"([^"]*)"|([A-Za-z_$][\w$]*))\s*:\s*(?:'([^']*)'|"([^"]*)"|([\w$]+))\s*$/.exec(entry);
+    if (!kv) continue;
+    const key = kv[1] ?? kv[2] ?? kv[3];
+    const val = kv[4] ?? kv[5] ?? kv[6];
+    if (FLAG_KEYS.includes(key)) out[key] = truthy(val);
+  }
+  return out;
+}
+
+/**
+ * parseWire + the flags of the event array, named: one options object
+ * behind the name under protocol 3 (`['EVENT', {queueLast:true}]`), the
+ * positions [3], [4], [5] of the array under protocol 2 (`['EVENT', false,
+ * false, <useMainModel>, <queueLast>, <noBusy>]`) - read by the shape the
+ * view carries, so a view of either backend fires with its flags.
+ */
 export function readWire(value) {
   const w = parseWire(value);
   if (!w) return null;
   if (w.fn === 'eB') {
     const f = w.flags || [];
-    w.options = { useMainModel: truthy(f[2]), queueLast: truthy(f[3]), noBusy: truthy(f[4]) };
+    const named = f.length === 1 ? optionsOf(f[0]) : null;
+    w.options = named
+      ? { useMainModel: !!named.useMainModel, queueLast: !!named.queueLast, noBusy: !!named.noBusy }
+      : { useMainModel: truthy(f[2]), queueLast: truthy(f[3]), noBusy: truthy(f[4]) };
     w.veto = /^\s*\.?eBP\s*\(\s*\$event\s*,\s*true\b/.test(String(value));
   }
   return w;

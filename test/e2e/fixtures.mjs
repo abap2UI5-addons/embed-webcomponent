@@ -19,6 +19,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { test as base, expect } from '@playwright/test';
+import { followUpActions, protocolOf, viewChanges } from '../../src/vendor/agent/snapshot.mjs';
 
 const ENDPOINT = '/sap/bc/z2ui5';
 
@@ -73,7 +74,23 @@ export async function roundtrip(page, action) {
   return { request: JSON.parse(res.request().postData()).value, response: json };
 }
 
-export const customActions = (response) => (response && response.S_FRONT.S_ACTION && response.S_FRONT.S_ACTION.T_CUSTOM) || [];
+/*
+ * What a response says, read from either wire (protocol 3: S_FRONT.VIEWS,
+ * NAV, ACTIONS; protocol 2: the S_ACTION envelope) - the same readers the
+ * frontend uses (the vendored snapshot.mjs), so a test asserts the answer,
+ * not the wire it came in.
+ */
+/** The follow-up actions: ACTIONS (3) or S_ACTION.T_CUSTOM (2). */
+export const customActions = (response) => (response ? followUpActions(response) : []);
+/** The slots the response displays a view in: VIEWS (3) or VIEW_SLOTS display (2). */
+export const shownSlots = (response) => viewChanges(response).filter((c) => !c.destroy).map((c) => c.slot);
+/** The URL intent: NAV (3) or the options of the ROUTER system action (2); undefined without one. */
+export function navOf(response) {
+  const front = response.S_FRONT;
+  if (protocolOf(response) === 3) return front.NAV && typeof front.NAV === 'object' ? front.NAV : undefined;
+  const router = ((front.S_ACTION && front.S_ACTION.T_SYSTEM) || []).find((a) => Array.isArray(a) && a[0] === 'ROUTER');
+  return router ? router[2] : undefined;
+}
 export const toastText = (response) => {
   const t = customActions(response).find((a) => a[0] === 'MESSAGE_TOAST' || (a[0] === 'CONTROL_GLOBAL' && a[1] === 'MESSAGE_TOAST'));
   if (!t) return null;

@@ -141,13 +141,19 @@ restores the caller's draft), the app-state hash
 (`#/z2ui5-xapp-state=<DRAFT>`: reload and bookmarks restore the state), and
 app-owned hashes (`hash_set` / `hash_replace` with a listener event raised
 on Back/Forward, `HASH_BACK` with a fallback route). The backend sends what
-the URL has to reflect as the `ROUTER` system action; this frontend applies
-it once per response, as the UI5 frontend's router does.
+the URL has to reflect as `S_FRONT.NAV` (protocol 3; the `ROUTER` system
+action under protocol 2); this frontend applies it once per response, as
+the UI5 frontend's router does. Under protocol 3 an app's own hash
+(`hash_set` / `hash_replace`) is written only while the app owns the hash
+(a listener registered, hash routing off), as the whole app hash; under
+protocol 2 it is appended to the hash the page has.
 
 - **Standalone** (`dist/index.html`, or `routing="hash"`): the page's hash is
   the app's. It is written with the History API, a browser Back/Forward or a
   manual edit sends the app-start-shaped restore request (no `ID`, the new
-  `HASH`), and every request carries the hash as `S_FRONT.HASH`. Inside the
+  `HASH` and the route parsed from it as `S_FRONT.ROUTE`, which a
+  protocol-3 backend restores from), and every request carries the hash as
+  `S_FRONT.HASH`. Inside the
   SAP Fiori launchpad the shell part before `&/` is kept.
 - **Embedded** (the default without `standalone`): the hash is the host's.
   The element never reads or writes `location`, sends no `HASH`, and tells
@@ -167,7 +173,7 @@ The protocol client, the renderer and the control registry are exported too
 
 The demo backend is abap2UI5 itself, transpiled to Node -
 [`@abap2ui5/node-runtime`](https://www.npmjs.com/package/@abap2ui5/node-runtime)
-1.146.0 - with 16 real sample apps of
+1.151.0 (wire protocol 3) - with 16 real sample apps of
 [abap2UI5/samples](https://github.com/abap2UI5/samples) transpiled on top,
 exactly as the package's README describes for your own apps.
 

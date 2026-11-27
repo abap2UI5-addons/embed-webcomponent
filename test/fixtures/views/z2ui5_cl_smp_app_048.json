@@ -2,16 +2,17 @@
  "S_FRONT": {
   "APP": "Z2UI5_CL_SMP_APP_048",
   "ID": "FIXTURE",
-  "PROTOCOL": 2,
-  "S_ACTION": {
-   "T_SYSTEM": [
-    [
-     "VIEW_SLOTS",
-     "display",
-     "MAIN",
-     "<mvc:View displayBlock=\"true\" height=\"100%\" xmlns=\"sap.m\" xmlns:mvc=\"sap.ui.core.mvc\"><Shell><Page title=\"abap2UI5 - List - StandardListItem, Highlight and Events\" showNavButton=\"false\" navButtonPress=\".eB(['___ZZZ_NAL'])\"><MessageStrip text=\"A List of generic StandardListItems showing highlight bars, colored infoState and wrapping texts; the detail button and selection changes raise backend events with message boxes.\" type=\"Information\" showIcon=\"true\" class=\"sapUiSmallMargin\"/><List headerText=\"List Output\" items=\"{/T_TAB}\" mode=\"SingleSelectMaster\" selectionChange=\".eB(['SELCHANGE'])\"><StandardListItem title=\"{TITLE}\" description=\"{DESCR}\" icon=\"{ICON}\" iconInset=\"false\" highlight=\"{HIGHLIGHT}\" info=\"{INFO}\" infoState=\"{HIGHLIGHT}\" type=\"Detail\" wrapping=\"true\" selected=\"{SELECTED}\" detailPress=\".eB(['EDIT'], ${TITLE}, ${DESCR}, ${ICON}, ${HIGHLIGHT}, ${INFO}, ${SELECTED})\"/></List></Page></Shell></mvc:View>"
-    ]
-   ]
+  "PROTOCOL": 3,
+  "VIEWS": {
+   "MAIN": {
+    "XML": "<mvc:View displayBlock=\"true\" height=\"100%\" xmlns=\"sap.m\" xmlns:mvc=\"sap.ui.core.mvc\"><Shell><Page title=\"abap2UI5 - List - StandardListItem, Highlight and Events\" showNavButton=\"false\" navButtonPress=\".eB(['___ZZZ_NAL'])\"><MessageStrip text=\"A List of generic StandardListItems showing highlight bars, colored infoState and wrapping texts; the detail button and selection changes raise backend events with message boxes.\" type=\"Information\" showIcon=\"true\" class=\"sapUiSmallMargin\"/><List headerText=\"List Output\" items=\"{/T_TAB}\" mode=\"SingleSelectMaster\" selectionChange=\".eB(['SELCHANGE'])\"><StandardListItem title=\"{TITLE}\" description=\"{DESCR}\" icon=\"{ICON}\" iconInset=\"false\" highlight=\"{HIGHLIGHT}\" info=\"{INFO}\" infoState=\"{HIGHLIGHT}\" type=\"Detail\" wrapping=\"true\" selected=\"{SELECTED}\" detailPress=\".eB(['EDIT'], ${TITLE}, ${DESCR}, ${ICON}, ${HIGHLIGHT}, ${INFO}, ${SELECTED})\"/></List></Page></Shell></mvc:View>"
+   },
+   "POPOVER": {
+    "DESTROY": true
+   },
+   "POPUP": {
+    "DESTROY": true
+   }
   }
  },
  "MODEL": {

@@ -11,6 +11,7 @@ await import('../../src/render/controls/index.js');
 const { Model, createDeviceModel } = await import('../../src/bindings/model.js');
 const { readWire } = await import('../../src/render/wires.js');
 const { TAGS } = await import('../../src/render/webcomponents-tags.js');
+const { viewChanges } = await import('../../src/vendor/agent/snapshot.mjs');
 
 function setup(data = {}) {
   const reports = [];
@@ -32,7 +33,8 @@ const viewOf = (body) => `<mvc:View ${NS}>${body}</mvc:View>`;
 for (const file of fs.readdirSync('test/fixtures/views')) {
   test(`renders the demo view ${file} without unsupported controls`, () => {
     const res = JSON.parse(fs.readFileSync(`test/fixtures/views/${file}`, 'utf8'));
-    const xml = res.S_FRONT.S_ACTION.T_SYSTEM.find((a) => a[0] === 'VIEW_SLOTS' && a[2] === 'MAIN')[3];
+    // the MAIN view of the recorded answer, read from either wire (VIEWS or VIEW_SLOTS)
+    const xml = viewChanges(res).find((c) => c.slot === 'MAIN' && !c.destroy).xml;
     const { render, reports } = setup(res.MODEL);
     const { host } = render(xml);
     assert.ok(host.querySelector('[data-ui5-control="sap.m.Page"]'));
@@ -88,6 +90,15 @@ test('eF wires and expression args over the event', () => {
   assert.equal(events[1].wire.fn, 'eF');
   assert.deepEqual([events[1].wire.action, ...events[1].args], ['CONTROL_GLOBAL', 'VIEW_SLOTS', 'destroy', 'POPUP']);
   assert.equal(readWire(".eBP($event, true, ['X'])").veto, true);
+  // the flags of the wire: one options object (protocol 3), or positions (protocol 2)
+  const none = { useMainModel: false, queueLast: false, noBusy: false };
+  assert.deepEqual(readWire(".eB(['S'])").options, none);
+  assert.deepEqual(readWire(".eB(['S',{queueLast:true,noBusy:true}], ${$parameters>/value})").options, { ...none, queueLast: true, noBusy: true });
+  assert.equal(readWire(".eB(['S',{queueLast:true,noBusy:true}], ${$parameters>/value})").args.length, 1);
+  assert.deepEqual(readWire(".eB(['S', { 'noBusy': true, useMainModel: true }])").options, { ...none, noBusy: true, useMainModel: true });
+  assert.deepEqual(readWire(".eBP($event, true, ['S',{queueLast:true}])").options, { ...none, queueLast: true });
+  assert.deepEqual(readWire(".eB(['S',false,false,false,true,true])").options, { ...none, queueLast: true, noBusy: true });
+  assert.deepEqual(readWire(".eB(['S',false,false,true])").options, { ...none, useMainModel: true });
 });
 
 test('unknown controls: a visible box, children still rendered, reported once each', () => {
