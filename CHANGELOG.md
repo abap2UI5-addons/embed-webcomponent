@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- **Package**: marked `private` again. It is not on npm, nothing builds it
+  before a pack (no `prepack`), and `main` and `exports` point at `dist/`,
+  which is not committed - so an `npm publish` from a checkout would have
+  shipped a package whose entry points do not exist. The note under the
+  rename below ("no longer marked private") described the intent of a
+  publish that has not happened; the flag goes again when a release
+  workflow builds `dist/` and publishes.
+- **Development dependencies**: happy-dom 21.0.4 (was 20.14.6; the unit
+  tests' DOM - advisories for host code execution and SSRF in the 20.x
+  line, fixed in the 21 major; the 116 unit tests pass unchanged) and
+  body-parser 2.4.0 through express (a DoS advisory of 2.3.0; the demo
+  server only).
 - **The vendored mcp-server modules move to
   [53555b0](https://github.com/abap2UI5/mcp-server/commit/53555b020baf4f95e3fde0f3edc9afcee4a3c5e1)**
   (its #90). What this frontend calls of them - `applyResponse`, the view
