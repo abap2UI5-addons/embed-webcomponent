@@ -25,7 +25,7 @@ import registry from '../render/registry.js';
 import '../render/controls/index.js';
 import { CSS } from './styles.js';
 import { textsFor, resolveLanguage } from './texts.js';
-import { sanitizeHtml } from '../render/controls/common.js';
+import { sanitizeBoxDetails } from '../render/controls/common.js';
 
 const BOX_TYPES = ['confirm', 'error', 'warning', 'success', 'information', 'alert'];
 const BOX_STATE = { error: 'Negative', warning: 'Critical', success: 'Positive', information: 'Information', confirm: 'None', alert: 'None', show: 'None' };
@@ -296,7 +296,10 @@ export class FrontendApp {
       if (opener) popup.opener = opener;
       else this.report({ kind: 'slot', detail: `POPOVER: opener '${options.openById}' not found` });
     }
-    popup.addEventListener('close', () => {
+    popup.addEventListener('close', (ev) => {
+      // the close of a picker inside (ui5-time-picker, a ComboBox) bubbles
+      // up here: only the popup's own close is one
+      if (ev.target !== popup) return;
       // closed by the user (Escape / outside click on a popover): the slot
       // goes locally, as the UI5 frontend's popover autoclose does
       if (!popup.__a2uClosing && slot === 'POPOVER' && this.slots.POPOVER === entry) this.session.closeSlot('POPOVER');
@@ -394,9 +397,9 @@ export class FrontendApp {
     if (details) {
       const det = d.createElement('div');
       det.className = 'a2u-box-details';
-      // a string is formatted text, as in UI5's MessageBox (sanitized like
-      // FormattedText); anything else is shown as JSON
-      if (typeof details === 'string') det.replaceChildren(sanitizeHtml(d, details));
+      // a string is formatted text, rebuilt from the tag whitelist of the
+      // UI5 frontend; anything else is shown as JSON
+      if (typeof details === 'string') det.replaceChildren(sanitizeBoxDetails(d, details));
       else det.textContent = JSON.stringify(details, null, 2);
       dlg.appendChild(det);
     }

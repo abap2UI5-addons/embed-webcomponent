@@ -73,6 +73,35 @@ export const isImageUrl = (v) => !!v && !isScriptUrl(v) && /^(https?:|data:image
 /* the attributes that hold a URL the browser follows or loads */
 const URL_ATTRIBUTES = ['href', 'src', 'xlink:href', 'action', 'formaction'];
 
+/*
+ * The details of a message box (spec/actions.md "Messages"): HTML the
+ * backend formats out of a table or a structure, rebuilt from a tag
+ * whitelist as the UI5 frontend does (core/Lib.js sanitizeMessageDetails) -
+ * lists, paragraphs, strong, em and br; script, style and template go with
+ * their content, any other tag goes and what it wrapped stays as text. No
+ * attribute survives, so no image loads and no handler runs.
+ */
+const BOX_TAGS = new Set(['ul', 'ol', 'li', 'strong', 'em', 'p']);
+const BOX_DROP = new Set(['script', 'style', 'template']);
+export function sanitizeBoxDetails(doc, html) {
+  const tpl = doc.createElement('template');
+  tpl.innerHTML = String(html ?? '');
+  const out = doc.createDocumentFragment();
+  const copy = (from, to) => {
+    for (const child of from.childNodes) {
+      if (child.nodeType === 3) to.appendChild(doc.createTextNode(child.nodeValue));
+      if (child.nodeType !== 1) continue;
+      const tag = child.localName;
+      if (BOX_DROP.has(tag)) continue;
+      if (tag === 'br') to.appendChild(doc.createElement('br'));
+      else if (BOX_TAGS.has(tag)) copy(child, to.appendChild(doc.createElement(tag)));
+      else copy(child, to);
+    }
+  };
+  copy(tpl.content, out);
+  return out;
+}
+
 /** Strip what must not run: scripts, event handlers, javascript: URLs, custom elements, style sheets. */
 export function sanitizeHtml(doc, html) {
   const tpl = doc.createElement('template');

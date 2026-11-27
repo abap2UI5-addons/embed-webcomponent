@@ -35,7 +35,7 @@ function footerBar(node, api, groups, el, names) {
 
 function closeWiring(el, node, api, wired) {
   el.addEventListener('before-close', (ev) => {
-    if (el.__a2uClosing) return;
+    if (el.__a2uClosing || ev.target !== el) return;
     if (ev.detail && ev.detail.escPressed && !wired) ev.preventDefault();
   });
   el.__a2uWired = wired;

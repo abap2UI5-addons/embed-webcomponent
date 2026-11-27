@@ -2,6 +2,47 @@
 
 ## Unreleased
 
+- **A nested control's event is no longer its parent's**: the events of
+  UI5 Web Components bubble, and the two-way bindings and event wires
+  listened to them from every descendant. A ComboBox in a list row reset
+  the `selected` of every row (the ComboBox's `selection-change` reached
+  the list), the toggle of an inner Panel fired the outer one's `expand`,
+  the tab select of an IconTabBar on a tab fired the outer bar's `select`,
+  and the `close` of a time picker in a dialog fired its `afterClose` and
+  took a popover down. An event counts only when the control itself fired
+  it - pointer and key events of the browser excepted, and a mapper that
+  needs its children's events says so (RadioButtonGroup).
+- **IconTabBar** selects among its own tabs and their sub-tabs only, not
+  the tabs of an IconTabBar inside one of them.
+- **Table**: an invisible `Column` hides the cells of its index in every
+  row, not just its header - the cell of a hidden key column showed under
+  the next header.
+- **RadioButton**: the button a selection deselects writes `false` to its
+  `selected` binding (UI5 `RadioButton#setSelected`), so the delta carries
+  both, as the UI5 frontend sends it.
+- **The edits of a view displayed anew are dropped**: a response that
+  displays a new view in MAIN, POPUP or POPOVER has a new model, and the
+  unsent edits of the old one were written over it - and went out with
+  the new view's next event as attributes nobody edited there.
+- **A user event that meets a timer tick is kept**: a click during a
+  `START_TIMER` tick in flight was dropped; the first one now waits, goes
+  out once the tick's response is adopted, with the id it names, and is
+  dropped with its view (an app switch, its popup closed, an error, a
+  route restore) - spec/transport.md "A user event that meets a timer
+  tick".
+- **Message box details are rebuilt from a tag whitelist**: they went
+  through the FormattedText sanitizer, which strips handlers and script
+  URLs but keeps every other tag - an `<img>` in the details loaded its
+  `src`. They now keep what the UI5 frontend keeps (`ul`, `ol`, `li`,
+  `p`, `strong`, `em`, `br`, no attributes; script, style and template
+  dropped with their content, any other tag unwrapped to its text) -
+  found by the protocol's `message.details-sanitized`, which a shadow root
+  had hidden the image from until now.
+- **Back during a roundtrip under KEEP/FRESH routing**: the answer of the
+  roundtrip wrote its route over the history entry the browser had gone
+  back to; it now leaves the URL alone, and the restore of that entry
+  supersedes it.
+
 - **abap2UI5 1.151.0 and later work again**: their backend answers wire
   protocol 3 (`S_FRONT.VIEWS`, `NAV`, `ACTIONS` instead of the `S_ACTION`
   envelope), and the element refused every such answer with "Protocol

@@ -513,10 +513,40 @@ define('sap.m.RatingIndicator', {
   read: { value: (el) => Number(el.value) },
 });
 
+/*
+ * Selecting a radio button deselects the others of its group without an
+ * event of theirs; UI5 sets their `selected` to false (RadioButton
+ * #setSelected), and the two-way binding writes it - so the delta carries
+ * the false of the one deselected as the UI5 frontend sends it. The group is
+ * the group name within the same document or shadow root (where
+ * ui5-radio-button groups by name, too).
+ */
+const RB_WRITE = '__a2uWriteRadio';
+function deselectPeers(el) {
+  const name = el.getAttribute('name');
+  if (!name || !el.checked) return;
+  const root = el.getRootNode ? el.getRootNode() : el.ownerDocument;
+  if (!root || !root.querySelectorAll) return;
+  let last = null;
+  for (const o of root.querySelectorAll('ui5-radio-button')) {
+    if (o === el || o.getAttribute('name') !== name || !o[RB_WRITE]) continue;
+    const v = o[RB_WRITE].get();
+    if (v === undefined || v === null || v === false || v === '' || v === 'false') continue;
+    // no refresh yet: the button's own write (after this listener) refreshes
+    // the bindings once, with every value of the group in place
+    o[RB_WRITE].set(false, false);
+    last = o[RB_WRITE];
+  }
+  if (last && !el[RB_WRITE]) last.set(false, true);
+}
+
 define('sap.m.RadioButton', {
   tag: 'ui5-radio-button',
+  init: (el) => {
+    el.addEventListener('change', (ev) => { if (ev.target === el) deselectPeers(el); }, true);
+  },
   props: {
-    selected: { prop: 'checked', bool: true, twoWay: { event: 'change', read: (el) => el.checked } },
+    selected: { prop: 'checked', bool: true, twoWay: { event: 'change', read: (el) => el.checked, expose: RB_WRITE } },
     text: { attr: 'text' },
     groupName: { attr: 'name' },
     enabled,
@@ -548,13 +578,14 @@ define('sap.m.RadioButtonGroup', {
     }, { groups });
     api.prop(el, 'selectedIndex', {
       set: (e, v) => { index = Number(v ?? 0); sync(); },
-      twoWay: { event: 'change', read: () => buttons().findIndex((b) => b.checked) },
+      // the change of one of its buttons: the group's own
+      twoWay: { event: 'change', read: () => buttons().findIndex((b) => b.checked), descendants: true },
     });
     api.bind(node.attrs.columns ?? '1', (v) => { el.style.gridTemplateColumns = `repeat(${Number(v) || 1}, auto)`; });
     if (node.attrs.enabled !== undefined) api.bind(node.attrs.enabled, (v) => buttons().forEach((b) => b.toggleAttribute('disabled', !api.toBool(v))));
     if (node.attrs.editable !== undefined) api.bind(node.attrs.editable, (v) => buttons().forEach((b) => b.toggleAttribute('readonly', !api.toBool(v))));
     if (node.attrs.valueState !== undefined) api.bind(node.attrs.valueState, (v) => buttons().forEach((b) => b.setAttribute('value-state', VALUE_STATE[v] || 'None')));
-    if (node.attrs.select) api.wire(el, 'select', { on: 'change', params: () => ({ selectedIndex: buttons().findIndex((b) => b.checked) }) });
+    if (node.attrs.select) api.wire(el, 'select', { on: 'change', descendants: true, params: () => ({ selectedIndex: buttons().findIndex((b) => b.checked) }) });
     return el;
   },
   read: { selectedIndex: (el) => [...el.querySelectorAll(':scope > ui5-radio-button')].findIndex((b) => b.checked) },

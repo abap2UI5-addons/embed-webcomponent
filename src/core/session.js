@@ -43,7 +43,7 @@
  * response body VERBATIM (httpErrorText - spec/errors.md: never stripped or
  * decoded; `HTTP <status>` when the body is empty); the UI shows it as text.
  */
-import { applyResponse, emptyState, modelKeyOf, protocolOf, viewChanges } from '../vendor/agent/snapshot.mjs';
+import { applyResponse, emptyState, modelKeyOf, protocolOf, rebuiltModels, viewChanges } from '../vendor/agent/snapshot.mjs';
 import { buildDelta } from '../vendor/agent/appclient.mjs';
 import { Model, createDeviceModel } from '../bindings/model.js';
 import { startRoute } from './router.js';
@@ -98,6 +98,10 @@ export class Session {
     this.namedModels = { device: createDeviceModel(win) };
     this.busy = false;
     this.queued = null;
+    /* the first user event that met a START_TIMER tick in flight */
+    this.tickKept = null;
+    /* the roundtrip in flight is a START_TIMER tick */
+    this.tickInFlight = false;
     this.appStack = [];
     this.listeners = { response: new Set(), busy: new Set(), error: new Set(), request: new Set() };
     this.lastRequest = null;
@@ -139,6 +143,7 @@ export class Session {
   async start(app) {
     this.app = app;
     this.queued = null;
+    this.tickKept = null;
     const front = await this.startFront(app);
     this.state = emptyState();
     for (const m of Object.values(this.models)) {
@@ -157,6 +162,7 @@ export class Session {
    */
   async restore(hash) {
     this.queued = null;
+    this.tickKept = null;
     const front = await this.startFront(this.app, hash);
     for (const m of Object.values(this.models)) m.edited.clear();
     return this.send({ S_FRONT: front }, null);
@@ -193,6 +199,15 @@ export class Session {
   async fire(slot, event, args = [], flags = {}) {
     if (this.busy) {
       if (flags.queueLast) this.queued = { slot, event, args, flags };
+      // a tick is no roundtrip the user started or can see: the first user
+      // event that meets one waits for its response and goes out then,
+      // with the id that response names (spec/transport.md "A user event
+      // that meets a timer tick"); a second one meets the busy guard
+      if (this.tickInFlight && !flags.timer && !this.tickKept) {
+        this.tickKept = { slot, event, args, flags };
+        this.emit('busy', { busy: true, silent: false });
+        return { kept: true };
+      }
       return { dropped: true };
     }
     const key = flags.useMainModel ? 'MAIN' : modelKeyOf(slot);
@@ -256,6 +271,7 @@ export class Session {
     // an ended session sends nothing more (a pending hash change, a timer)
     if (this.ended) return null;
     this.setBusy(true, { silent: !!flags.noBusy });
+    this.tickInFlight = !!flags.timer;
     this.lastRequest = body;
     this.lastCarried = carried;
     this.lastFlags = flags;
@@ -289,13 +305,19 @@ export class Session {
       this.adopt(json);
       return json;
     } catch (e) {
+      // the event a tick kept was fired into the screen the error replaces
+      this.tickKept = null;
       if (this.ended) return null;
       this.emit('error', e);
       throw e;
     } finally {
+      this.tickInFlight = false;
       if (this.ended) this.busy = false;
       else {
         this.setBusy(false);
+        const kept = this.tickKept;
+        this.tickKept = null;
+        if (kept) this.fire(kept.slot, kept.event, kept.args, kept.flags).catch(() => {});
         if (this.queued) {
           const q = this.queued;
           this.queued = null;
@@ -329,7 +351,16 @@ export class Session {
       else this.appStack.push(next.app);
     }
     const changed = Object.keys({ ...prev.slots, ...next.slots }).filter((s) => prev.slots[s] !== next.slots[s]);
+    // the event a tick kept goes with its view: another app, or its slot
+    // closed (a view rebuilt in the same slot is the same screen)
+    if (this.tickKept && ((next.app && prev.app && next.app !== prev.app) || !next.slots[this.tickKept.slot])) this.tickKept = null;
+    // a view the response displays anew has a new model: the edits made in
+    // the old one are gone with it - written over the new data they would
+    // go out with the new view's next event, as attributes nobody edited
+    // there (spec/request.md: MODEL names only the attributes edited)
+    const rebuilt = rebuiltModels(response);
     for (const key of MODEL_KEYS) {
+      if (rebuilt.has(key)) this.models[key].edited.clear();
       const m = next.models[key];
       if (!m) {
         if (prev.models[key]) {
@@ -363,6 +394,7 @@ export class Session {
   end() {
     this.ended = true;
     this.queued = null;
+    this.tickKept = null;
     this.namedModels.device.dispose();
     if (this.transport.endSession) this.transport.endSession();
   }

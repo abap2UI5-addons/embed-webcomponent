@@ -112,6 +112,28 @@ test('the hash of the state on screen restores nothing; a change during a roundt
   assert.deepEqual(seen.navigate, ['#/app/Z_A/OLD']);
 });
 
+test('a Back during a roundtrip: its answer leaves the entry the browser went back to, the restore supersedes it', () => {
+  const { win, router, seen, state } = setup();
+  router.sync({ setNavRouting: 'KEEP' }, { id: 'D1', app: 'Z_A' });
+  router.sync({ setNavRouting: 'KEEP', checkNavAppCall: true, navAppCallPrevApp: 'Z_A', navAppCallPrevId: 'P1' }, { id: 'D3', app: 'Z_B' });
+  // an event of Z_B is in flight when the user presses Back
+  state.busy = true;
+  win.history.back();
+  assert.deepEqual(seen.navigate, [], 'parked until the roundtrip ends');
+  // the answer of the event: the URL stays on the caller's entry
+  router.sync({}, { id: 'D4', app: 'Z_B' });
+  assert.deepEqual(win.entries, ['/app/Z_A/P1', '/app/Z_B/D3']);
+  assert.equal(win.pos, 0);
+  state.busy = false;
+  router.idle();
+  assert.deepEqual(seen.navigate, ['#/app/Z_A/P1']);
+  // the answer of the restore adopts the entry; Forward is still there
+  router.sync({}, { id: 'D5', app: 'Z_A' });
+  assert.deepEqual(win.entries, ['/app/Z_A/P1', '/app/Z_B/D3']);
+  router.sync({}, { id: 'D6', app: 'Z_A' });
+  assert.equal(win.location.hash, '#/app/Z_A/D6', 'afterwards the route follows the id again');
+});
+
 test('app state: setAppStateActive writes #/z2ui5-xapp-state=<ID>, a response without it clears it', () => {
   const { win, router } = setup();
   router.sync({ setAppStateActive: true }, { id: 'D7', app: 'Z_A' });
