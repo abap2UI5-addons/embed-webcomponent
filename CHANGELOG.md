@@ -20,6 +20,16 @@
 - **RadioButton**: the button a selection deselects writes `false` to its
   `selected` binding (UI5 `RadioButton#setSelected`), so the delta carries
   both, as the UI5 frontend sends it.
+- **The edits of a view displayed anew are dropped**: a response that
+  displays a new view in MAIN, POPUP or POPOVER has a new model, and the
+  unsent edits of the old one were written over it - and went out with
+  the new view's next event as attributes nobody edited there.
+- **A user event that meets a timer tick is kept**: a click during a
+  `START_TIMER` tick in flight was dropped; the first one now waits, goes
+  out once the tick's response is adopted, with the id it names, and is
+  dropped with its view (an app switch, its popup closed, an error, a
+  route restore) - spec/transport.md "A user event that meets a timer
+  tick".
 - **abap2UI5 1.151.0 and later work again**: their backend answers wire
   protocol 3 (`S_FRONT.VIEWS`, `NAV`, `ACTIONS` instead of the `S_ACTION`
   envelope), and the element refused every such answer with "Protocol

@@ -202,6 +202,112 @@ test('busy: a second event is dropped, a queue-last wire is sent afterwards', as
   assert.deepEqual(sent, ['start', 'SLOW', 'TYPE2']);
 });
 
+/* a transport whose roundtrip of `slow` waits for release() */
+function gated(slow, reply) {
+  let release;
+  const gate = new Promise((r) => { release = r; });
+  const sent = [];
+  return {
+    sent,
+    release: () => release(),
+    roundtrip: async (body) => {
+      sent.push(JSON.parse(JSON.stringify(body)));
+      if (body.S_FRONT.EVENT === slow) await gate;
+      const r = reply(sent.length, body);
+      if (r && r.status) return r;
+      return { ok: true, status: 200, body: JSON.stringify(r) };
+    },
+  };
+}
+const settle = () => new Promise((r) => setTimeout(r, 10));
+
+test('a user event that meets a timer tick waits for it and goes out with the id its response named', async () => {
+  // spec/transport.md "A user event that meets a timer tick"
+  const t = gated('TICK', (n) => answer3(`D${n}`, n === 1 ? { views: { MAIN: { XML } }, model: {} } : {}));
+  const s = session(t);
+  await s.start('Z_APP');
+  const tick = s.fire('MAIN', 'TICK', [], { noBusy: true, timer: true });
+  assert.deepEqual(await s.fire('MAIN', 'CLICK', [{ a: 1 }]), { kept: true });
+  assert.deepEqual(await s.fire('MAIN', 'CLICK2'), { dropped: true }, 'only the first is kept');
+  assert.deepEqual(t.sent.map((b) => b.S_FRONT.EVENT), [undefined, 'TICK'], 'nothing overlaps the tick');
+  t.release();
+  await tick;
+  await settle();
+  assert.deepEqual(t.sent.map((b) => b.S_FRONT.EVENT), [undefined, 'TICK', 'CLICK']);
+  assert.equal(t.sent[2].S_FRONT.ID, 'D2', 'the id of the tick\'s response');
+  assert.deepEqual(t.sent[2].S_FRONT.T_EVENT_ARG, [{ a: 1 }]);
+  assert.equal(t.sent[2].S_FRONT.TIMER, undefined);
+});
+
+test('the event a tick kept is dropped with its view: an app switch, an error, a route restore', async () => {
+  const other = gated('TICK', (n) => answer3(`D${n}`, n === 1 ? { views: { MAIN: { XML } }, model: {} } : { app: 'Z_OTHER', views: { MAIN: { XML } } }));
+  const s1 = session(other);
+  await s1.start('Z_APP');
+  const tick1 = s1.fire('MAIN', 'TICK', [], { noBusy: true, timer: true });
+  await s1.fire('MAIN', 'CLICK');
+  other.release();
+  await tick1;
+  await settle();
+  assert.deepEqual(other.sent.map((b) => b.S_FRONT.EVENT), [undefined, 'TICK'], 'another app: dropped');
+
+  const failing = gated('TICK', (n) => (n === 1 ? answer3('D1', { views: { MAIN: { XML } }, model: {} }) : { ok: false, status: 500, body: 'dump' }));
+  const s2 = session(failing);
+  await s2.start('Z_APP');
+  const tick2 = s2.fire('MAIN', 'TICK', [], { noBusy: true, timer: true });
+  await s2.fire('MAIN', 'CLICK');
+  failing.release();
+  await tick2.catch(() => {});
+  await settle();
+  assert.deepEqual(failing.sent.map((b) => b.S_FRONT.EVENT), [undefined, 'TICK'], 'an error: dropped');
+
+  const popup = gated('TICK', (n) => answer3(`D${n}`, n === 1 ? { views: { MAIN: { XML }, POPUP: { XML } }, model: {} } : { views: { POPUP: { DESTROY: true } } }));
+  const s3 = session(popup);
+  await s3.start('Z_APP');
+  const tick3 = s3.fire('MAIN', 'TICK', [], { noBusy: true, timer: true });
+  await s3.fire('POPUP', 'OK');
+  popup.release();
+  await tick3;
+  await settle();
+  assert.deepEqual(popup.sent.map((b) => b.S_FRONT.EVENT), [undefined, 'TICK'], 'its popup closed: dropped');
+});
+
+test('a view the response displays anew takes the unsent edits of the old one with it', async () => {
+  // spec/request.md: MODEL names only the attributes the user edited - an
+  // edit of app A, made while a tick was in flight, is no edit of app B
+  const t = gated('TICK', (n) => [
+    answer3('D1', { app: 'Z_A', views: { MAIN: { XML } }, model: { NAME: 'a' } }),
+    answer3('D2', { app: 'Z_B', views: { MAIN: { XML } }, model: { NAME: 'b-own' } }),
+    answer3('D3', { app: 'Z_B' }),
+  ][n - 1]);
+  const s = session(t);
+  await s.start('Z_A');
+  const tick = s.fire('MAIN', 'TICK', [], { noBusy: true, timer: true });
+  s.models.MAIN.set('/NAME', 'typed in A');
+  t.release();
+  await tick;
+  assert.deepEqual(s.models.MAIN.data, { NAME: 'b-own' });
+  assert.equal(s.models.MAIN.edited.size, 0);
+  await s.fire('MAIN', 'B_EVENT');
+  assert.equal(t.sent[2].MODEL, undefined);
+});
+
+test('a model push without a new view keeps the edits it did not carry', async () => {
+  const t = gated('TICK', (n) => [
+    answer3('D1', { views: { MAIN: { XML } }, model: { NAME: 'a', N: 1 } }),
+    answer3('D2', { model: { NAME: 'a', N: 2 } }),
+    answer3('D3'),
+  ][n - 1]);
+  const s = session(t);
+  await s.start('Z_A');
+  const tick = s.fire('MAIN', 'TICK', [], { noBusy: true, timer: true });
+  s.models.MAIN.set('/NAME', 'typed');
+  t.release();
+  await tick;
+  assert.deepEqual(s.models.MAIN.data, { NAME: 'typed', N: 2 });
+  await s.fire('MAIN', 'GO');
+  assert.deepEqual(t.sent[2].MODEL, { NAME: 'typed' });
+});
+
 test('end: an answer still under way is dropped, nothing is sent afterwards', async () => {
   // the element removed or restarted with another app while a roundtrip
   // runs: its answer must not render, run follow-up actions (a REDIRECT, the
