@@ -47,7 +47,15 @@
 - **The edits of a view displayed anew are dropped**: a response that
   displays a new view in MAIN, POPUP or POPOVER has a new model, and the
   unsent edits of the old one were written over it - and went out with
-  the new view's next event as attributes nobody edited there.
+  the new view's next event as attributes nobody edited there. This holds
+  for the SAME view re-displayed in its slot too: an edit typed while a
+  noBusy roundtrip or a timer tick was in flight is dropped when its answer
+  displays the view again - intended, the UI5 frontend re-creates the view
+  and its model the same way. Only a model push without a view keeps the
+  edits it did not carry.
+- **A queue-last event that meets a timer tick goes out once**: it was
+  both kept by the tick and queued, and was sent twice after the tick's
+  answer. The tick now keeps it and it is not queued as well.
 - **A user event that meets a timer tick is kept**: a click during a
   `START_TIMER` tick in flight was dropped; the first one now waits, goes
   out once the tick's response is adopted, with the id it names, and is
