@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- **The vendored mcp-server modules move to
+  [53555b0](https://github.com/abap2UI5/mcp-server/commit/53555b020baf4f95e3fde0f3edc9afcee4a3c5e1)**
+  (its #90). What this frontend calls of them - `applyResponse`, the view
+  slots, `buildDelta` - reads the wire as before; the hardening of the
+  agent client (an event that may have run, the 32 MB read cap, the
+  linear `$parameters` parse, the view depth cut) stays in the agent half
+  this bundle tree-shakes away. One caller change: `applyResponse` now
+  folds `STOP_TIMER` into its own timer bookkeeping and leaves it out of
+  the follow-up actions, so the session puts it back in its place
+  (`followUps`) and the action dispatcher reports it, as before, as an
+  action this frontend does not run (the repeating timer and `STOP_TIMER`
+  are the UI5 profile's).
 - **A nested control's event is no longer its parent's**: the events of
   UI5 Web Components bubble, and the two-way bindings and event wires
   listened to them from every descendant. A ComboBox in a list row reset
