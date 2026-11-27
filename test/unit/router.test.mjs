@@ -284,7 +284,7 @@ test('profile actions: both shapes of portable-v1.json give the wire actions; ea
   assert.deepEqual(split.wire, ['HASH_BACK', 'ROUTER', 'SET_FOCUS']);
   assert.deepEqual(split.clientApi, ['SET_PUSH_STATE']);
   const supported = new Set(createActions({ ui: {}, fire: () => {}, closeSlot: () => {}, report: () => {} }).supported());
-  // allowed by the profile, not implemented yet: reported as unsupported when they arrive (README "Limits")
+  // allowed by the profile, not implemented yet: reported as unsupported when they arrive (README "Limitations")
   const NOT_YET = ['DOWNLOAD_B64_FILE', 'KEYBOARD_SHORTCUT', 'PLAY_AUDIO', 'SCROLL_INTO_VIEW', 'SCROLL_TO', 'SET_FAVICON', 'SET_SIZE_LIMIT', 'STORE_DATA', 'SYSTEM_LOGOUT'];
   const missing = p.wire.filter((n) => n !== 'ROUTER' && !supported.has(n));
   assert.deepEqual(missing, NOT_YET.filter((n) => p.wire.includes(n)));
