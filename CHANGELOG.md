@@ -2,6 +2,30 @@
 
 ## Unreleased
 
+- **Package**: marked `private` again. It is not on npm, nothing builds it
+  before a pack (no `prepack`), and `main` and `exports` point at `dist/`,
+  which is not committed - so an `npm publish` from a checkout would have
+  shipped a package whose entry points do not exist. The note under the
+  rename below ("no longer marked private") described the intent of a
+  publish that has not happened; the flag goes again when a release
+  workflow builds `dist/` and publishes.
+- **Development dependencies**: happy-dom 21.0.4 (was 20.14.6; the unit
+  tests' DOM - advisories for host code execution and SSRF in the 20.x
+  line, fixed in the 21 major; the 116 unit tests pass unchanged) and
+  body-parser 2.4.0 through express (a DoS advisory of 2.3.0; the demo
+  server only).
+- **The vendored mcp-server modules move to
+  [53555b0](https://github.com/abap2UI5/mcp-server/commit/53555b020baf4f95e3fde0f3edc9afcee4a3c5e1)**
+  (its #90). What this frontend calls of them - `applyResponse`, the view
+  slots, `buildDelta` - reads the wire as before; the hardening of the
+  agent client (an event that may have run, the 32 MB read cap, the
+  linear `$parameters` parse, the view depth cut) stays in the agent half
+  this bundle tree-shakes away. One caller change: `applyResponse` now
+  folds `STOP_TIMER` into its own timer bookkeeping and leaves it out of
+  the follow-up actions, so the session puts it back in its place
+  (`followUps`) and the action dispatcher reports it, as before, as an
+  action this frontend does not run (the repeating timer and `STOP_TIMER`
+  are the UI5 profile's).
 - **A nested control's event is no longer its parent's**: the events of
   UI5 Web Components bubble, and the two-way bindings and event wires
   listened to them from every descendant. A ComboBox in a list row reset

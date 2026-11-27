@@ -43,7 +43,7 @@
  * response body VERBATIM (httpErrorText - spec/errors.md: never stripped or
  * decoded; `HTTP <status>` when the body is empty); the UI shows it as text.
  */
-import { applyResponse, emptyState, modelKeyOf, protocolOf, rebuiltModels, viewChanges } from '../vendor/agent/snapshot.mjs';
+import { applyResponse, emptyState, followUpActions, modelKeyOf, protocolOf, rebuiltModels, viewChanges } from '../vendor/agent/snapshot.mjs';
 import { buildDelta } from '../vendor/agent/appclient.mjs';
 import { Model, createDeviceModel } from '../bindings/model.js';
 import { startRoute } from './router.js';
@@ -67,6 +67,44 @@ export function httpErrorText(status, body) {
   const s = body === undefined || body === null ? '' : String(body);
   if (!s.trim()) return `HTTP ${status}`;
   return s.length > ERROR_TEXT_MAX ? `${s.slice(0, ERROR_TEXT_MAX)}\n... (${s.length - ERROR_TEXT_MAX} more characters)` : s;
+}
+
+/* A follow-up action as the vendored applyResponse reads one: an array, or
+ * its JSON text; null for anything else. */
+function actionOf(raw) {
+  if (Array.isArray(raw)) return raw;
+  if (typeof raw !== 'string') return null;
+  try {
+    const v = JSON.parse(raw);
+    return Array.isArray(v) ? v : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The follow-up actions a response hands to the action dispatcher, in its
+ * order: the `custom` applyResponse leaves (a VIEW_SLOTS destroy is folded
+ * into the slots), plus every STOP_TIMER - which applyResponse folds into its
+ * own timer bookkeeping (the agent snapshot's repeating timer) and leaves out
+ * of `custom`. This frontend implements neither the repeat nor STOP_TIMER
+ * (the UI5 profile, protocol spec/actions.md "The timer"), so STOP_TIMER
+ * goes to the dispatcher, which reports it as it reports every action it
+ * does not run.
+ */
+export function followUps(response, custom) {
+  const out = [];
+  let i = 0;
+  for (const raw of followUpActions(response)) {
+    const a = actionOf(raw);
+    if (!a) continue;
+    const b = a[0] === 'CONTROL_GLOBAL' ? a.slice(1) : a;
+    if (b[0] === 'VIEW_SLOTS' && b[1] === 'destroy') continue;
+    if (b[0] === 'STOP_TIMER') out.push(a);
+    else if (i < custom.length) out.push(custom[i++]);
+  }
+  while (i < custom.length) out.push(custom[i++]);
+  return out;
 }
 
 export class ProtocolError extends Error {
@@ -372,7 +410,7 @@ export class Session {
       if (m !== prev.models[key]) this.models[key].replace(clone(m.data) || {});
     }
     this.state = next;
-    const custom = next.custom || [];
+    const custom = followUps(response, next.custom || []);
     // the URL intent (one per response, spec/navigation.md): NAV under
     // protocol 3, the ROUTER system action's options under 2, as the same
     // ['ROUTER', 'sync', options] entry; {} without one - the URL follows

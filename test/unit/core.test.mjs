@@ -1,7 +1,7 @@
 /* The core protocol client: requests, delta, slots, transport, actions. */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { Session, PROTOCOL, PROTOCOLS, httpErrorText, ERROR_TEXT_MAX } from '../../src/core/session.js';
+import { Session, PROTOCOL, PROTOCOLS, httpErrorText, ERROR_TEXT_MAX, followUps } from '../../src/core/session.js';
 import { createFetchTransport, isValidContextId } from '../../src/core/transport.js';
 import { createActions, isSameOriginUrl } from '../../src/core/actions.js';
 
@@ -410,6 +410,31 @@ test('transport: a context the answer opens after endSession() is ended too', as
   assert.equal(calls[1].headers['sap-terminate'], 'session');
   assert.equal(calls[1].headers['sap-contextid'], 'SID9');
   assert.equal(tr.state.contextId, null);
+});
+
+test('STOP_TIMER reaches the action dispatcher in its place - the vendored applyResponse keeps it out of custom', async () => {
+  // applyResponse folds STOP_TIMER into its timer bookkeeping (mcp-server
+  // 53555b0); this frontend does not implement it, and the dispatcher reports it
+  const t = scripted([
+    answer3('D1', {
+      views: { MAIN: { XML } },
+      actions: [['MESSAGE_TOAST', 'show', 'a'], ['STOP_TIMER'], 'not json', ['VIEW_SLOTS', 'destroy', 'POPUP'], '["MESSAGE_TOAST","show","b"]'],
+    }),
+    answer('D2', { custom: [['START_TIMER', 'TICK', '100'], JSON.stringify(['STOP_TIMER'])] }),
+  ]);
+  const s = session(t);
+  const seen = [];
+  s.on('response', (r) => seen.push(r));
+  await s.start('Z_APP');
+  assert.deepEqual(seen[0].custom, [['MESSAGE_TOAST', 'show', 'a'], ['STOP_TIMER'], ['MESSAGE_TOAST', 'show', 'b']]);
+  await s.fire('MAIN', 'GO');
+  assert.deepEqual(seen[1].custom, [['START_TIMER', 'TICK', '100'], ['STOP_TIMER']]);
+  assert.deepEqual(followUps({ S_FRONT: { PROTOCOL: 3 } }, []), [], 'no actions, none');
+  const reports = [];
+  const a = createActions({ ui: {}, fire() {}, closeSlot() {}, report: (r) => reports.push(r.detail) });
+  a.run(['STOP_TIMER']);
+  assert.equal(reports.length, 1);
+  assert.match(reports[0], /STOP_TIMER/);
 });
 
 test('frontend actions: toast template, box, title, URL rules, unsupported reported', () => {
