@@ -5,10 +5,18 @@
  *
  *   start(app)        POST { S_FRONT: { ORIGIN, PATHNAME, SEARCH: '?app_start=<CLASS>' } }
  *   fire(slot, ...)   an eB wire: { S_FRONT: { ID, EVENT, T_EVENT_ARG }, MODEL: <delta> }
+ *                     (a START_TIMER tick carries S_FRONT.TIMER: true for a
+ *                     protocol-3 backend)
  *   closeSlot(slot)   the frontend-only popup/popover close (no roundtrip)
  *   restore(hash)     the app-start-shaped request of a route the URL now
  *                     names (browser Back/Forward under hash routing): no ID,
  *                     the location, CONFIG and the new HASH
+ *
+ * Both wires are read, by the number the response declares (protocolOf of
+ * the vendored snapshot.mjs): protocol 3 (abap2UI5 1.151.0 on) answers
+ * S_FRONT.VIEWS, NAV and ACTIONS; protocol 2 (up to 1.150.0, which real
+ * systems keep answering) the S_ACTION envelope - VIEW_SLOTS and ROUTER in
+ * T_SYSTEM, the app's follow-up actions in T_CUSTOM.
  *
  * Each response is folded into the state by the vendored applyResponse
  * (snapshot.mjs): which slot (MAIN, NEST, NEST2, POPUP, POPOVER) holds which
@@ -25,19 +33,23 @@
  * The renderer subscribes with on('response', fn): fn({ state, changed,
  * custom, routerOptions, appChanged, response }) after every adopted
  * response - `changed` lists the slots whose view must be (re)built,
- * `custom` the T_CUSTOM follow-up actions to run once the DOM exists,
- * `routerOptions` the options of the ROUTER system action ({} without one)
- * for the URL sync (core/router.js).
+ * `custom` the follow-up actions to run once the DOM exists (ACTIONS;
+ * T_CUSTOM under protocol 2), `routerOptions` the URL intent - NAV, or the
+ * options of protocol 2's ROUTER system action; {} without one - for the
+ * URL sync (core/router.js).
  *
  * A failed roundtrip (non-2xx) is a ProtocolError whose message is the
  * response body VERBATIM (httpErrorText - spec/errors.md: never stripped or
  * decoded; `HTTP <status>` when the body is empty); the UI shows it as text.
  */
-import { applyResponse, emptyState, modelKeyOf } from '../vendor/agent/snapshot.mjs';
+import { applyResponse, emptyState, modelKeyOf, protocolOf, viewChanges } from '../vendor/agent/snapshot.mjs';
 import { buildDelta } from '../vendor/agent/appclient.mjs';
 import { Model, createDeviceModel } from '../bindings/model.js';
 
-export const PROTOCOL = 2;
+/** The newest wire this frontend reads (protocol spec/versioning.md). */
+export const PROTOCOL = 3;
+/** Every wire it reads: a response declaring another number is refused. */
+export const PROTOCOLS = Object.freeze([2, 3]);
 const MODEL_KEYS = ['MAIN', 'POPUP', 'POPOVER'];
 const clone = (v) => (v === undefined ? undefined : JSON.parse(JSON.stringify(v)));
 
@@ -92,6 +104,8 @@ export class Session {
     this.lastResponse = null;
     this.roundtrips = 0;
     this.ended = false;
+    /* the wire the last adopted response spoke (0 before the first) */
+    this.protocol = 0;
   }
 
   on(type, fn) {
@@ -163,7 +177,8 @@ export class Session {
    * @param {string} slot   MAIN | NEST | NEST2 | POPUP | POPOVER
    * @param {string} event  the event name
    * @param {Array} args    the computed T_EVENT_ARG
-   * @param {object} [flags] { useMainModel, queueLast, noBusy, hash }
+   * @param {object} [flags] { useMainModel, queueLast, noBusy, hash, timer }
+   *                          timer: a START_TIMER tick (S_FRONT.TIMER under protocol 3)
    */
   async fire(slot, event, args = [], flags = {}) {
     if (this.busy) {
@@ -174,6 +189,10 @@ export class Session {
     const model = this.models[key];
     const body = { S_FRONT: { ID: this.state.id, EVENT: event } };
     if (args && args.length) body.S_FRONT.T_EVENT_ARG = args;
+    // the tick of a START_TIMER, marked as the UI5 frontend marks it
+    // (spec/request.md "The timer tick") - a protocol-2 backend is sent what
+    // it was always sent
+    if (flags.timer && this.protocol >= 3) body.S_FRONT.TIMER = true;
     const hash = flags.hash !== undefined ? flags.hash : this.hashOf();
     if (hash) body.S_FRONT.HASH = hash;
     let sent = null;
@@ -249,8 +268,11 @@ export class Session {
         throw new ProtocolError(`Invalid JSON response: ${e.message}`);
       }
       if (!json || !json.S_FRONT) throw new ProtocolError('Invalid response: missing S_FRONT');
-      if (json.S_FRONT.PROTOCOL !== undefined && json.S_FRONT.PROTOCOL !== PROTOCOL) {
-        throw new ProtocolError(`Protocol mismatch: this frontend speaks ${PROTOCOL}, the backend answered ${json.S_FRONT.PROTOCOL}.`);
+      // a present and different number is refused; an absent one is a
+      // backend older than the field and let through
+      const declared = json.S_FRONT.PROTOCOL;
+      if (declared !== undefined && declared !== null && !PROTOCOLS.includes(declared)) {
+        throw new ProtocolError(`Protocol mismatch: this frontend speaks ${PROTOCOLS.join(' and ')}, the backend answered ${declared}.`);
       }
       this.roundtrips += 1;
       if (carried) carried.model.confirmSent(carried.sent);
@@ -277,11 +299,13 @@ export class Session {
     const prev = this.state;
     const next = applyResponse(prev, response);
     this.lastResponse = response;
-    // another APP than the one rendered last takes POPUP and POPOVER down -
-    // unless this very response displays them (spec/response.md)
-    if (prev.app && next.app && next.app !== prev.app) {
-      const shown = new Set(((response.S_FRONT.S_ACTION || {}).T_SYSTEM || [])
-        .filter((a) => Array.isArray(a) && a[0] === 'VIEW_SLOTS' && a[1] === 'display').map((a) => a[2]));
+    this.protocol = protocolOf(response);
+    // protocol 2: another APP than the one rendered last takes POPUP and
+    // POPOVER down - unless this very response displays them. Under
+    // protocol 3 the backend states that teardown in VIEWS, and a slot the
+    // response does not name stays as it is (spec/response.md "View slots")
+    if (this.protocol < 3 && prev.app && next.app && next.app !== prev.app) {
+      const shown = new Set(viewChanges(response).filter((c) => !c.destroy).map((c) => c.slot));
       for (const slot of ['POPUP', 'POPOVER']) {
         if (next.slots[slot] && !shown.has(slot)) {
           delete next.slots[slot];
@@ -308,10 +332,15 @@ export class Session {
     }
     this.state = next;
     const custom = next.custom || [];
-    const router = (response.S_FRONT.S_ACTION && response.S_FRONT.S_ACTION.T_SYSTEM || [])
-      .filter((a) => Array.isArray(a) && a[0] === 'ROUTER');
-    // the ROUTER action's options (one per response, spec/navigation.md);
-    // {} without one - the URL follows the new draft id either way
+    // the URL intent (one per response, spec/navigation.md): NAV under
+    // protocol 3, the ROUTER system action's options under 2, as the same
+    // ['ROUTER', 'sync', options] entry; {} without one - the URL follows
+    // the new draft id either way
+    const front = response.S_FRONT;
+    const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
+    const router = this.protocol >= 3
+      ? (isObject(front.NAV) ? [['ROUTER', 'sync', front.NAV]] : [])
+      : (front.S_ACTION && front.S_ACTION.T_SYSTEM || []).filter((a) => Array.isArray(a) && a[0] === 'ROUTER');
     const routerOptions = Object.assign({}, ...router.map((a) => (a[2] && typeof a[2] === 'object' ? a[2] : {})));
     this.emit('response', { state: next, changed, custom, router, routerOptions, appChanged: !!(next.app && next.app !== prev.app && prev.app), response });
   }

@@ -49,7 +49,11 @@ texts, documentation, and every text the frontend shows.
 - **Vendored files are never edited by hand**: `src/vendor/agent/*`
   (`npm run vendor`), `demo/abap/*` (`scripts/vendor-samples.mjs`),
   `profile/portable-v1.json`. Their hashes are tested. A fix goes upstream,
-  then re-vendor. Functionality the vendored modules lack is written next to
+  then re-vendor. `.github/workflows/bump-agent.yml` re-vendors
+  `src/vendor/agent/` weekly from mcp-server's main (only when one of the
+  three modules changed there) and opens a PR once lint, tests and build
+  pass with the new copy; a red run means a caller - `src/core/session.js`
+  first - has to change with it. Functionality the vendored modules lack is written next to
   them (example: `src/bindings/expression.js` - the profile's expression
   grammar is a superset of viewxml's evaluator).
 - **A new control** = a mapper in `src/render/controls/` (status `full` or

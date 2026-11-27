@@ -440,3 +440,17 @@ test('a nested slot with methodDestroy replaces the one in the parent itself, no
   app.destroy();
   root.remove();
 });
+
+test('destroy during a roundtrip: the delayed busy overlay never shows', async () => {
+  const { FrontendApp } = await import('../../src/ui/app.js');
+  const root = document.createElement('div');
+  document.body.appendChild(root);
+  const app = new FrontendApp({ root, host: root, endpoint: '/sap/bc/z2ui5', transport: { roundtrip: () => new Promise(() => {}), endSession() {} } });
+  app.setBusy(true, false);
+  assert.ok(app.busyTimer, 'the overlay is scheduled');
+  app.destroy();
+  assert.equal(app.busyTimer, null);
+  await new Promise((r) => setTimeout(r, 450));
+  assert.equal(app.rootEl.hasAttribute('data-busy'), false);
+  root.remove();
+});

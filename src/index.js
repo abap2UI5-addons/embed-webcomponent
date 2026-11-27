@@ -9,7 +9,7 @@ import { defineElement, Abap2UI5App } from './element.js';
 
 export { defineElement, Abap2UI5App };
 export { FrontendApp } from './ui/app.js';
-export { Session, ProtocolError, PROTOCOL } from './core/session.js';
+export { Session, ProtocolError, PROTOCOL, PROTOCOLS } from './core/session.js';
 export { createFetchTransport } from './core/transport.js';
 export { createActions } from './core/actions.js';
 export { Renderer } from './render/renderer.js';
